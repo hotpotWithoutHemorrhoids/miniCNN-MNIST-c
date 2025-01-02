@@ -447,10 +447,11 @@ void softmax_backward(float* inp, int inp_size,int target, float* d_inp){
     }
 }
 
-void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, float* weights, float* d_inp, float* mementun, float lr){
+void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, float* weights, float* bias, float* d_inp, float* mementun, float lr){
     /* 
         weights: (inp_len, out_len) 
     */
+   //TODO  检查修改
    int inp_len = inp_size.x*inp_size.y*inp_size.z;
    int out_len = out_size.z; // fc 输出1维
     for(int i=0;i<inp_len; i++){
@@ -458,16 +459,23 @@ void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, floa
             d_inp[i] += d_loss[j]*weights[i*out_size.z+j];
         }
     }
+    float* weight_mementun = mementun;
+    float* bias_mementun = mementun + inp_len*out_len;
 
     // update weights
     for (int i = 0; i < inp_len ; i++){
         float* weight_row = weights + i*out_size.z;
-        float* mementun_row = mementun + i*out_size.z;
+        float* mementun_row = weight_mementun + i*out_size.z;
         for (int j = 0; j < out_len; j++){
             float gradW_ij = inp[i]*d_loss[j];
             mementun_row[j] = mementun_row[j]*MOMENTUM - lr*gradW_ij;
             weight_row[j] -= mementun_row[j];
         }
+    }
+
+    for(int i=0;i<out_len; i++){
+        bias_mementun[i] = bias_mementun[i]*MOMENTUM - lr*d_loss[i];
+        bias[i] -= bias_mementun[i];
     }
 }
 
@@ -617,9 +625,9 @@ void cnn_backward(CNN *model,float* inp,int label, float lr, int output_size){
     softmax_backward(output, output_size,label, grad_acts->grad_out_fc2);
     // TODO 更新 fc bias
     fc_backward(acts->out_fc1,params->fc2.size.in_size, grad_acts->grad_out_fc2,
-                 params->fc2.size.out_size,params->fc2.weights,grad_acts->grad_out_fc1,mementun->mem_fc2,lr);
+                 params->fc2.size.out_size,params->fc2.weights,params->fc2.bias, grad_acts->grad_out_fc1,mementun->mem_fc2,lr);
 
-    fc_backward(acts->out_pool2, params->fc2.size.in_size, grad_acts->grad_out_fc1,params->fc1.size.out_size,params->fc1.weights,
+    fc_backward(acts->out_pool2, params->fc2.size.in_size, grad_acts->grad_out_fc1,params->fc1.size.out_size,params->fc1.weights, params->fc1.bias,
                 grad_acts->grad_out_pool2, mementun->mem_fc1, lr);
     
     pool_backward(acts->out_conv2, params->pool2.size.in_size, grad_acts->grad_out_pool2, params->pool2.size.out_size,
