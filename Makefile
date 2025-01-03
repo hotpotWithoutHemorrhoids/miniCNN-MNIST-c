@@ -4,8 +4,8 @@ CXX = g++
 CC = gcc
 
 # 编译选项
-CXXFLAGS = -g -Wall -lm 
-CFLAGS = -g -Wall -lm -O3 -ffast-math
+CXXFLAGS = -g -o0-Wall -lm 
+CFLAGS = -g -Wall -O3 -lm -ffast-math
 
 # 目标文件
 TARGET = cnn
