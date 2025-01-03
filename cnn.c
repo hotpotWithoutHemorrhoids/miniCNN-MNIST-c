@@ -395,6 +395,11 @@ Shape fc_forward(float* inp, int inp_size, float* out, float* weights, int outpu
         }
     }
 
+    // RELU
+    for(int i=0;i<output_size;i++){
+        out[i] = out[i]>0?out[i]:0.0f;
+    }
+
     return output_shape;
 }
 
@@ -412,6 +417,8 @@ void softmax_forward(float* inp, int inp_size){
     for (int i = 0; i < inp_size; i++){
         inp[i] *= inv_sum;
     }
+    // printf("softmax sum: %f, inp_size: %d, max: %f\n", sum, inp_size, max);
+    // printVector(inp, inp_size);
     return;
 }
    
@@ -434,7 +441,9 @@ void cnn_forward(CNN *model, float* inp, int h, int w){
     // fc_forward(acts->fc, fc_shape.z, acts->output, model->params.output.weights, model->params.output.output_size);
     fc_forward(acts->out_fc1, params->fc1.size.out_size.z, 
                 acts->out_fc2, params->fc2.weights, params->fc2.size.out_size.z,params->fc2.bias);
+    // printVector(acts->out_fc2, params->fc2.size.out_size.z);
     softmax_forward(acts->out_fc2, params->fc2.size.out_size.z);
+    // printVector(acts->out_fc2, params->fc2.size.out_size.z);
 }
 
 void softmax_backward(float* inp, int inp_size,int target, float* d_inp){
@@ -451,9 +460,14 @@ void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, floa
     /* 
         weights: (inp_len, out_len) 
     */
-   //TODO  检查修改
    int inp_len = inp_size.x*inp_size.y*inp_size.z;
    int out_len = out_size.z; // fc 输出1维
+
+    // RELU backward
+    for(int i=0;i<out_len;i++){
+        d_loss[i] *= d_loss[i]>0?1:0.0f;
+    }
+
     for(int i=0;i<inp_len; i++){
         for(int j=0;j<out_size.z;j++){
             d_inp[i] += d_loss[j]*weights[i*out_size.z+j];
@@ -623,7 +637,6 @@ void cnn_backward(CNN *model,float* inp,int label, float lr, int output_size){
     Mementun* mementun = &(model->mementun);
     float* output = acts->out_fc2;
     softmax_backward(output, output_size,label, grad_acts->grad_out_fc2);
-    // TODO 更新 fc bias
     fc_backward(acts->out_fc1,params->fc2.size.in_size, grad_acts->grad_out_fc2,
                  params->fc2.size.out_size,params->fc2.weights,params->fc2.bias, grad_acts->grad_out_fc1,mementun->mem_fc2,lr);
 
@@ -659,41 +672,42 @@ int main(int argc, char const *argv[])
 
     int train_size = (int)(dataloader.nImages*TRAIN_SPLIT);
     int test_size = dataloader.nImages - train_size;
+    printf("train_size: %d, test_size: %d\n", train_size, test_size);
 
-    for (int epoch = 0; epoch < EPOCHS; epoch++){
+        
+    for(int b=0;b<train_size/BATCH;b++){
         start = clock();
-        
-        for(int b=0;b<train_size/BATCH;b++){
             // float* images = dataloader.images + b*BATCH*ImageSize*ImageSize;
-            load_betch_images(&dataloader, &model.datas, b, BATCH);
-            float loss = 0.0f;
-            float corr = 0.0f;
-            for (int t = 0; t < BATCH; t++){
-                float* images = model.datas.data + t*ImageSize*ImageSize;
-                int label_idx = model.datas.labels[t];
-                cnn_forward(&model,images,dataloader.imageSize.row,dataloader.imageSize.col);
-                loss -= logf(model.acts.out_fc2[label_idx] + 1e-10f);
-                // printf("label: %d, output: %f\n", label_idx, model.acts.output[label_idx]);
-                cnn_backward(&model,images, label_idx, LEARN_RATE, model.params.fc2.size.out_size.z);
-                corr += model.acts.out_fc2[label_idx]>0.5f?1.0f:0.0f;
-            }
-            
-            // loss = 0.0f;
-            printf("epoch: %d,batch:%d,  loss:%.3f  corr: %.3f \n", epoch,b, loss/BATCH, corr/BATCH);
-        }
-        
-
+        load_betch_images(&dataloader, &model.datas, b, BATCH);
+        float loss = 0.0f;
         float corr = 0.0f;
-        for(int t=0;t<test_size;t++){    
-            float* test_images = dataloader.images + (train_size+t)*ImageSize*ImageSize;
-            int test_labels = dataloader.labels + train_size+t;
-            cnn_forward(&model,test_images,dataloader.imageSize.row,dataloader.imageSize.col);
-            corr += model.acts.out_fc2[test_labels]>0.5f?1.0f:0.0f;
+        for (int t = 0; t < BATCH; t++){
+            float* images = model.datas.data + t*ImageSize*ImageSize;
+            int label_idx = model.datas.labels[t];
+            // printf("label: %d\n", label_idx);
+            cnn_forward(&model,images,dataloader.imageSize.row,dataloader.imageSize.col);
+            
+            loss -= logf(model.acts.out_fc2[label_idx] + 1e-10f);
+            // printf("label: %d, output: %f\n", label_idx, model.acts.out_fc2[label_idx]);
+            cnn_backward(&model,images, label_idx, LEARN_RATE, model.params.fc2.size.out_size.z);
+            corr += model.acts.out_fc2[label_idx]>0.5f?1.0f:0.0f;
         }
-        printf("epoch: %d, test accuracy: %f\n", epoch, corr/test_size);
         end = clock();
+            // loss = 0.0f;
+        printf("batch:%d,  loss:%.3f  corr: %.3f  cost time: %.3f\n", b, loss/BATCH, corr/BATCH, (float)(end-start)/CLOCKS_PER_SEC);
+    
+    }
+
+    float corr = 0.0f;
+    for(int t=0;t<test_size;t++){    
+        float* test_images = dataloader.images + (train_size+t)*ImageSize*ImageSize;
+        int test_labels = dataloader.labels + train_size+t;
+        cnn_forward(&model,test_images,dataloader.imageSize.row,dataloader.imageSize.col);
+        corr += model.acts.out_fc2[test_labels]>0.5f?1.0f:0.0f;
     }
     
+    printf(" test accuracy: %f\n", corr/test_size);
+           
 
     DataLoader_clear(&dataloader);
     CNN_clear(&model);

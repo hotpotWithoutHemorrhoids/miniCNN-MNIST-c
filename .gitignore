@@ -11,6 +11,8 @@
 !doc/
 !doc/**/*
 
+!tests/
+
 
 # 提交README.md
 !*.md
