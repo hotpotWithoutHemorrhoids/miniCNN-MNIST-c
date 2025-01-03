@@ -24,7 +24,7 @@
 #define EPOCHS 10
 #define BATCH 1000
 #define TRAIN_SPLIT 0.8
-#define LEARN_RATE 0.05
+#define LEARN_RATE 0.001f
 #define MOMENTUM 0.9f
 
 typedef struct{
@@ -251,6 +251,11 @@ void CNN_init(CNN *model, int imageSize,int k1, int c1, int stride1, int p1,int 
         model->acts_memory = (float*)malloc(total_acts*sizeof(float));
         model->grad_acts_memory = (float*)malloc(total_acts*sizeof(float));
 
+        for(int i=0;i<total_acts;i++){
+            model->acts_memory[i] = 0.0f;
+            model->grad_acts_memory[i] = 0.0f;
+        }
+
         model->acts.out_conv1 = model->acts_memory + offset;
         model->grad_acts.grad_out_conv1 = model->grad_acts_memory + offset;
         offset += params.conv1.size.out_size.x * params.conv1.size.out_size.y * params.conv1.size.out_size.z;
@@ -286,7 +291,10 @@ void CNN_init(CNN *model, int imageSize,int k1, int c1, int stride1, int p1,int 
         total_mementun += model->params.conv1.num_params;
 
         model->mementun_memory = (float*)malloc(total_mementun*sizeof(float));
-
+        for (int i = 0; i < total_mementun; i++){
+            model->mementun_memory[i] = 0.0f;
+        }
+        
         model->mementun.mem_conv1 = model->mementun_memory + offset;
         offset += model->params.conv1.num_params;
 
@@ -482,13 +490,13 @@ void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, floa
         float* mementun_row = weight_mementun + i*out_size.z;
         for (int j = 0; j < out_len; j++){
             float gradW_ij = inp[i]*d_loss[j];
-            mementun_row[j] = mementun_row[j]*MOMENTUM - lr*gradW_ij;
+            mementun_row[j] = mementun_row[j]*MOMENTUM + lr*gradW_ij;
             weight_row[j] -= mementun_row[j];
         }
     }
 
     for(int i=0;i<out_len; i++){
-        bias_mementun[i] = bias_mementun[i]*MOMENTUM - lr*d_loss[i];
+        bias_mementun[i] = bias_mementun[i]*MOMENTUM + lr*d_loss[i];
         bias[i] -= bias_mementun[i];
     }
 }
@@ -545,7 +553,7 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
     int out_z = out_size.z;
     int inp_h = inp_size.x;
     int inp_w = inp_size.y;
-    int inp_z = inp_size.z;
+    // int inp_z = inp_size.z;
     // relu backward
     for(int z = 0;z<out_z;z++){
         for (int x = 0; x < out_h; x++){
@@ -557,7 +565,7 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
     for(int c=0;c<channel;c++){
         for(int i=0;i<kernel_size;i++){
             float* mementun_row = mementun + c*kernel_size*kernel_size + i*kernel_size;
-            float* conv_weights_row = conv_weights + c*kernel_size*kernel_size + i*kernel_size;
+            // float* conv_weights_row = conv_weights + c*kernel_size*kernel_size + i*kernel_size;
             for(int j=0;j<kernel_size;j++){
                 float grad_w = 0.0f;
                 for (int inp_c = 0; inp_c < inp_size.z; inp_c++){
@@ -567,7 +575,7 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
                                 grad_w += inp_c_image[(i*stride+l)*out_w+j*stride+k]*d_loss[c*out_h*out_w + l*out_w + k];
                         }
                     }
-                mementun_row[j] = mementun_row[j]*MOMENTUM - lr*grad_w;
+                mementun_row[j] = mementun_row[j]*MOMENTUM + lr*grad_w;
                 // conv_weights_row[j] += mementun_row[j];
             }
         }
@@ -625,8 +633,14 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
         free(full_conv_dloss);
     }
 
-    for (int i = 0; i < channel*kernel_size*kernel_size; i++){
-        conv_weights[i] += mementun[i];
+    for(int c=0;c<channel;c++){
+        for(int i=0;i<kernel_size;i++){
+            float* mementun_row = mementun + c*kernel_size*kernel_size + i*kernel_size;
+            float* conv_weights_row = conv_weights + c*kernel_size*kernel_size + i*kernel_size;
+            for(int j=0;j<kernel_size;j++){
+                conv_weights_row[j] -= mementun_row[j];
+            }
+        }
     }
 }
 
@@ -689,6 +703,7 @@ int main(int argc, char const *argv[])
             
             loss -= logf(model.acts.out_fc2[label_idx] + 1e-10f);
             // printf("label: %d, output: %f\n", label_idx, model.acts.out_fc2[label_idx]);
+            // TODO backward maybe question
             cnn_backward(&model,images, label_idx, LEARN_RATE, model.params.fc2.size.out_size.z);
             corr += model.acts.out_fc2[label_idx]>0.5f?1.0f:0.0f;
         }
@@ -701,13 +716,13 @@ int main(int argc, char const *argv[])
     float corr = 0.0f;
     for(int t=0;t<test_size;t++){    
         float* test_images = dataloader.images + (train_size+t)*ImageSize*ImageSize;
-        int test_labels = dataloader.labels + train_size+t;
+        int test_label_idx =  dataloader.labels[train_size+t];
         cnn_forward(&model,test_images,dataloader.imageSize.row,dataloader.imageSize.col);
-        corr += model.acts.out_fc2[test_labels]>0.5f?1.0f:0.0f;
+        // printf("label: %d, output-prob: %f\n", test_label_idx, model.acts.out_fc2[test_label_idx]);
+        corr += model.acts.out_fc2[test_label_idx]>0.5f?1.0f:0.0f;
     }
     
-    printf(" test accuracy: %f\n", corr/test_size);
-           
+    printf("test accuracy: %f\n", corr/test_size);
 
     DataLoader_clear(&dataloader);
     CNN_clear(&model);
