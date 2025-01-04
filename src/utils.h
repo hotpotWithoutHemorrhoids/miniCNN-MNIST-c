@@ -56,13 +56,4 @@ extern inline void fclose_check(FILE *fp, const char* file, int line) {
 #define fcloseCheck(fp) fclose_check(fp, __FILE__, __LINE__)
 
 
-extern inline void _print_vector(float* vec, int size){
-    for(int i=0;i<size;i++){
-        printf("%.1f ", vec[i]);
-    }
-    printf("\n");
-}
-
-#define printVector(vec, size) _print_vector(vec, size)
-
 #endif

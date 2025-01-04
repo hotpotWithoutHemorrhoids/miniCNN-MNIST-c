@@ -3,7 +3,9 @@
 #include <math.h>
 #include <time.h>
 #include <float.h>
+#include <stdbool.h>
 #include "dataloader.h"
+#include "debug.h"
 
 
 #define TRAIN_IMG_PATH "data/train-images.idx3-ubyte"
@@ -390,7 +392,7 @@ Shape pool_froward(float* inp, int h, int w, int z, float* out, int pool_size){
 }
 
 
-Shape fc_forward(float* inp, int inp_size, float* out, float* weights, int output_size, float* bias){
+Shape fc_forward(float* inp, int inp_size, float* out, float* weights, int output_size, float* bias, bool acti_func){
     Shape output_shape = {1,1,output_size};
 
     for(int i = 0; i<output_size; i++){
@@ -404,12 +406,16 @@ Shape fc_forward(float* inp, int inp_size, float* out, float* weights, int outpu
     }
 
     // RELU
-    for(int i=0;i<output_size;i++){
-        out[i] = out[i]>0?out[i]:0.0f;
+    if(acti_func){
+        for(int i=0;i<output_size;i++){
+            out[i] = out[i]>0?out[i]:0.0f;
+        }
     }
 
     return output_shape;
 }
+
+
 
 void softmax_forward(float* inp, int inp_size){
     float sum = 0.0f;
@@ -445,10 +451,10 @@ void cnn_forward(CNN *model, float* inp, int h, int w){
     // printf("pool2_shape: %d, %d, %d\n", pool2_shape.x, pool2_shape.y, pool2_shape.z);
     // int flatten_size = pool2_shape.x*pool2_shape.y*pool2_shape.z;
     fc_forward(acts->out_pool2, params->pool2.size.out_size.x*params->pool2.size.out_size.y*params->pool2.size.out_size.z,
-                acts->out_fc1, params->fc1.weights, params->fc1.size.out_size.z,params->fc1.bias);
+                acts->out_fc1, params->fc1.weights, params->fc1.size.out_size.z,params->fc1.bias, true);
     // fc_forward(acts->fc, fc_shape.z, acts->output, model->params.output.weights, model->params.output.output_size);
     fc_forward(acts->out_fc1, params->fc1.size.out_size.z, 
-                acts->out_fc2, params->fc2.weights, params->fc2.size.out_size.z,params->fc2.bias);
+                acts->out_fc2, params->fc2.weights, params->fc2.size.out_size.z,params->fc2.bias, false);
     // printVector(acts->out_fc2, params->fc2.size.out_size.z);
     softmax_forward(acts->out_fc2, params->fc2.size.out_size.z);
     // printVector(acts->out_fc2, params->fc2.size.out_size.z);
@@ -464,7 +470,7 @@ void softmax_backward(float* inp, int inp_size,int target, float* d_inp){
     }
 }
 
-void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, float* weights, float* bias, float* d_inp, float* mementun, float lr){
+void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, float* weights, float* bias, float* d_inp, float* mementun, float lr, bool acti_func){
     /* 
         weights: (inp_len, out_len) 
     */
@@ -472,9 +478,12 @@ void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, floa
    int out_len = out_size.z; // fc 输出1维
 
     // RELU backward
-    for(int i=0;i<out_len;i++){
-        d_loss[i] *= d_loss[i]>0?1:0.0f;
+    if(acti_func){
+        for(int i=0;i<out_len;i++){
+            d_loss[i] *= d_loss[i]>0?1:0.0f;
+        }
     }
+
 
     for(int i=0;i<inp_len; i++){
         for(int j=0;j<out_size.z;j++){
@@ -651,11 +660,14 @@ void cnn_backward(CNN *model,float* inp,int label, float lr, int output_size){
     Mementun* mementun = &(model->mementun);
     float* output = acts->out_fc2;
     softmax_backward(output, output_size,label, grad_acts->grad_out_fc2);
+
+    // printVector(grad_acts->grad_out_fc2, output_size);
+
     fc_backward(acts->out_fc1,params->fc2.size.in_size, grad_acts->grad_out_fc2,
-                 params->fc2.size.out_size,params->fc2.weights,params->fc2.bias, grad_acts->grad_out_fc1,mementun->mem_fc2,lr);
+                 params->fc2.size.out_size,params->fc2.weights,params->fc2.bias, grad_acts->grad_out_fc1,mementun->mem_fc2,lr, false);
 
     fc_backward(acts->out_pool2, params->fc2.size.in_size, grad_acts->grad_out_fc1,params->fc1.size.out_size,params->fc1.weights, params->fc1.bias,
-                grad_acts->grad_out_pool2, mementun->mem_fc1, lr);
+                grad_acts->grad_out_pool2, mementun->mem_fc1, lr, true);
     
     pool_backward(acts->out_conv2, params->pool2.size.in_size, grad_acts->grad_out_pool2, params->pool2.size.out_size,
                     grad_acts->grad_out_conv2, params->pool2.pool_size);
