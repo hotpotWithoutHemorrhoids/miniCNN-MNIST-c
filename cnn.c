@@ -65,7 +65,7 @@ void init_conv(Conv* conv, int in_x,int in_y, int in_channel, int kernel_size, i
     conv->filters = filters;
     init_size(&(conv->size), in_x, in_y, in_channel, 
                 (in_x - kernel_size)/stride + 1, (in_y - kernel_size)/stride + 1, filters);
-    conv->weights_size = kernel_size*kernel_size*filters;
+    conv->weights_size = filters* in_channel*kernel_size*kernel_size;
     conv->num_params = conv->weights_size;
     conv->weights = NULL;
 }
@@ -249,6 +249,7 @@ void CNN_init(CNN *model, int imageSize,int k1, int c1, int stride1, int p1,int 
         total_acts += params.fc1.size.out_size.x * params.fc1.size.out_size.y * params.fc1.size.out_size.z;
         total_acts += params.fc2.size.out_size.x * params.fc2.size.out_size.y * params.fc2.size.out_size.z;
         model->total_acts = total_acts;
+        model->total_grad_acts = total_acts;
 
         model->acts_memory = (float*)malloc(total_acts*sizeof(float));
         model->grad_acts_memory = (float*)malloc(total_acts*sizeof(float));
@@ -311,6 +312,12 @@ void CNN_init(CNN *model, int imageSize,int k1, int c1, int stride1, int p1,int 
     }
 }
 
+void initialize_memory(float* mem, int size){
+    for(int i=0;i<size;i++){
+        mem[i] = 0.0f;
+    }
+}
+
 void CNN_clear(CNN *model){
     if(model->params_memory != NULL){
         free(model->params_memory);
@@ -338,12 +345,14 @@ void CNN_clear(CNN *model){
     }
 }
 
-Shape conv_forward(float *inp, int h, int w,int z,float* out, float* conv_weights, int kernel_size, int stride, int channel){
+Shape conv_forward(float *inp, Shape in_shape,float* out, float* conv_weights, int kernel_size, int stride, int channel){
     /* 
     inp: (h,w,z)
     out: ((h-kernel_size)/stride+1,(w-kernel_size)/stride+1, channel)
     conv_weights: (kernel_size,kernel_size,channel)
     */
+    // TODO
+    int h = in_shape.y, w = in_shape.x,  in_channel = in_shape.z;
     int out_h = (h-kernel_size)/stride + 1;
     int out_w = (w-kernel_size)/stride + 1;
     Shape output_shape = {out_h, out_w, channel};
@@ -352,13 +361,19 @@ Shape conv_forward(float *inp, int h, int w,int z,float* out, float* conv_weight
     for (int c = 0; c < channel; c++){
         for (int i = 0; i < out_h; i++){
             for (int j = 0; j < out_w; j++){
+
                 // 输出的第i,j位置应该是输入的i*stride:i*stride+kernel_size,j*stride:j*stride+kernel_size的卷积
                 float sum = 0.0f;
-                for (int k = 0; k < kernel_size; k++){
-                    for (int l = 0; l < kernel_size; l++){
-                        sum += inp[(i*stride+k)*w + j*stride+l]*conv_weights[(k*kernel_size+l)*channel + c];
+                for(int in_c=0 ;in_c<in_channel; in_c++){
+                    float* inp_c = inp + in_c*h*w;
+                    float* conv_weights_c = conv_weights + c*in_channel*kernel_size*kernel_size + in_c*kernel_size*kernel_size;
+                    for (int k = 0; k < kernel_size; k++){
+                        for (int l = 0; l < kernel_size; l++){
+                            sum += inp_c[(i*stride+k)*w + j*stride+l]*conv_weights_c[k*kernel_size+l];
+                        }
                     }
                 }
+
                 // relu
                 out[c*out_size + i*out_w + j] = sum>0?sum:0.0f;
             }
@@ -439,12 +454,12 @@ void softmax_forward(float* inp, int inp_size){
 void cnn_forward(CNN *model, float* inp, int h, int w){
     Activation* acts = &(model->acts);
     Paramerters* params = &(model->params);
-    conv_forward(inp,h,w,1, 
+    conv_forward(inp,params->conv1.size.in_size, 
                 acts->out_conv1, params->conv1.weights, params->conv1.kernel_size, params->conv1.stride, params->conv1.filters);
     pool_froward(acts->out_conv1,
                 params->conv1.size.out_size.y,params->conv1.size.out_size.x, params->conv1.size.out_size.z,
                 acts->out_pool1, params->pool1.pool_size);
-    conv_forward(acts->out_pool1, params->pool1.size.out_size.y,params->pool1.size.out_size.x, params->pool1.size.out_size.z,
+    conv_forward(acts->out_pool1, params->conv2.size.in_size,
                 acts->out_conv2, params->conv2.weights, params->conv2.kernel_size,params->conv2.stride, params->conv2.filters);
     pool_froward(acts->out_conv2, params->conv2.size.out_size.y, params->conv2.size.out_size.x,params->conv2.size.out_size.z,
                 acts->out_pool2,params->pool2.pool_size);
@@ -484,7 +499,7 @@ void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, floa
         }
     }
 
-
+    // update d_inp
     for(int i=0;i<inp_len; i++){
         for(int j=0;j<out_size.z;j++){
             d_inp[i] += d_loss[j]*weights[i*out_size.z+j];
@@ -557,38 +572,42 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
         conv_weights: (kernel_size,kernel_size,channel)
         mementun: (kernel_size,kernel_size,channel)
     */
+    // TODO update conv backward
     int out_h = out_size.x;
     int out_w = out_size.y;
     int out_z = out_size.z;
     int inp_h = inp_size.x;
     int inp_w = inp_size.y;
+    int inp_z = inp_size.z;
     // int inp_z = inp_size.z;
     // relu backward
     for(int z = 0;z<out_z;z++){
         for (int x = 0; x < out_h; x++){
             for (int y = 0; y < out_w; y++){
-                d_loss[z*out_h*out_w + x*out_w + y] = out[z*out_h*out_w + x*out_w + y]>0?d_loss[z*out_h*out_w + x*out_w + y]:0.0f;
+                d_loss[z*out_h*out_w + x*out_w + y] *= out[z*out_h*out_w + x*out_w + y]>0?1.0f:0.0f;
             }
         }}
-    // update weights
+    
+    // update mementun
     for(int c=0;c<channel;c++){
         for(int i=0;i<kernel_size;i++){
-            float* mementun_row = mementun + c*kernel_size*kernel_size + i*kernel_size;
             // float* conv_weights_row = conv_weights + c*kernel_size*kernel_size + i*kernel_size;
             for(int j=0;j<kernel_size;j++){
-                float grad_w = 0.0f;
+                float grad_w_ij = 0.0f;
                 for (int inp_c = 0; inp_c < inp_size.z; inp_c++){
+                    float* mementun_row = mementun +c*inp_c*kernel_size*kernel_size+ inp_c*kernel_size*kernel_size + i*kernel_size;
                     float* inp_c_image = inp + inp_c*inp_h*inp_w;
                     for(int l=0;l<out_size.x; l++){
                         for(int k=0;k<out_size.y;k++){
-                                grad_w += inp_c_image[(i*stride+l)*out_w+j*stride+k]*d_loss[c*out_h*out_w + l*out_w + k];
+                                grad_w_ij += inp_c_image[(i*stride+l)*out_w+j*stride+k]*d_loss[c*out_h*out_w + l*out_w + k];
                         }
                     }
-                mementun_row[j] = mementun_row[j]*MOMENTUM + lr*grad_w;
+                mementun_row[j] = mementun_row[j]*MOMENTUM + lr*grad_w_ij;
                 // conv_weights_row[j] += mementun_row[j];
             }
         }
         }
+        
     }
     /* 
         for one channel
@@ -642,6 +661,7 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
         free(full_conv_dloss);
     }
 
+    // update weights
     for(int c=0;c<channel;c++){
         for(int i=0;i<kernel_size;i++){
             float* mementun_row = mementun + c*kernel_size*kernel_size + i*kernel_size;
@@ -716,6 +736,7 @@ int main(int argc, char const *argv[])
             loss -= logf(model.acts.out_fc2[label_idx] + 1e-10f);
             // printf("label: %d, output: %f\n", label_idx, model.acts.out_fc2[label_idx]);
             // TODO backward maybe question
+            initialize_memory(model.grad_acts_memory, model.total_grad_acts);
             cnn_backward(&model,images, label_idx, LEARN_RATE, model.params.fc2.size.out_size.z);
             corr += model.acts.out_fc2[label_idx]>0.5f?1.0f:0.0f;
         }
