@@ -661,6 +661,8 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
         free(full_conv_dloss);
     }
 
+
+
     // update weights
     for(int c=0;c<channel;c++){
         for(int i=0;i<kernel_size;i++){
