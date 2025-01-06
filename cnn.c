@@ -610,7 +610,7 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
         
     }
 
-    
+
     /* 
         for one channel
         suspect input size: (X,Y), kernel_size:K, stride: s=1,
@@ -662,8 +662,6 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
         }
         free(full_conv_dloss);
     }
-
-
 
     // update weights
     for(int c=0;c<channel;c++){
