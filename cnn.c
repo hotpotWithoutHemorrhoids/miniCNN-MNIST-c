@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include "dataloader.h"
 #include "debug.h"
+#include "cnn.h"
 
 
 #define TRAIN_IMG_PATH "data/train-images.idx3-ubyte"
@@ -29,17 +30,6 @@
 #define LEARN_RATE 0.001f
 #define MOMENTUM 0.9f
 
-typedef struct{
-    int x;
-    int y;
-    int z;
-} Shape;
-
-typedef struct
-{
-    Shape in_size;
-    Shape out_size;
-}Size;
 void init_size(Size *size, int in_x,int in_y,int in_z,int out_x,int out_y,int out_z){
     size->in_size.x = in_x;
     size->in_size.y = in_y;
@@ -48,16 +38,6 @@ void init_size(Size *size, int in_x,int in_y,int in_z,int out_x,int out_y,int ou
     size->out_size.y = out_y;
     size->out_size.z = out_z;
 }
-
-typedef struct{
-    float* weights;
-    Size size;
-    int kernel_size;
-    int stride;
-    int filters;
-    int weights_size;
-    int num_params;
-} Conv;
 
 void init_conv(Conv* conv, int in_x,int in_y, int in_channel, int kernel_size, int stride, int filters){
     conv->kernel_size = kernel_size;
@@ -70,25 +50,10 @@ void init_conv(Conv* conv, int in_x,int in_y, int in_channel, int kernel_size, i
     conv->weights = NULL;
 }
 
-typedef struct
-{
-    Size size;
-    int pool_size;
-}Pool;
-
 void init_pool(Pool* pool, int in_x, int in_y, int in_z, int pool_size){
     init_size(&(pool->size), in_x, in_y, in_z, in_x/pool_size, in_y/pool_size, in_z);
     pool->pool_size = pool_size;
 }
-
-typedef struct{
-    float* weights;
-    float* bias;
-    Size size;
-    int weight_size;
-    int bias_size;
-    int num_params;
-}FC;
 
 void init_fc(FC* fc, int in_size, int out_size){
     init_size(&(fc->size), 1, 1, in_size, 1, 1, out_size);
@@ -98,65 +63,6 @@ void init_fc(FC* fc, int in_size, int out_size){
     fc->weights = NULL;
     fc->bias = NULL;
 }
-
-typedef struct{
-    Conv conv1; // (K1,K1,C1)
-    Pool pool1;
-    Conv conv2; // (K2,K2,C2)
-    Pool pool2;
-    // Conv Conv3; // (K3,K3,C3)
-    FC fc1;
-    FC fc2;
-}Paramerters;
-
-typedef struct{
-    float* out_conv1; // ( (imageSize-K1)/stride + 1, (imageSize-K1)/stride + 1, C1)
-    Shape conv1_size;
-    float* out_pool1; // ( ((imageSize-K1)/stride + 1)/P1, ((imageSize-K1)/stride + 1)/P1, C1)
-    Shape pool1_size;
-    float* out_conv2; // ( ((imageSize-K1)/stride + 1)/P1 - K2)/stride + 1, ((imageSize-K1)/stride + 1)/P1 - K2)/stride + 1, C2)
-    Shape conv2_size;
-    float* out_pool2; // ( (((imageSize-K1)/stride + 1)/P1 - K2)/stride + 1)/P2, (((imageSize-K1)/stride + 1)/P1 - K2)/stride + 1)/P2, C2)
-    Shape pool2_size;
-    float* out_fc1; 
-    Shape fc_size;
-    float* out_fc2; // (1,1,10)
-    Shape output_size;
-}Activation;
-
-typedef struct{
-    float* grad_out_conv1;
-    float* grad_out_pool1;
-    float* grad_out_conv2;
-    float* grad_out_pool2;
-    float* grad_out_fc1;
-    float* grad_out_fc2;
-}Grad_Activation;
-
-typedef struct{
-    float* mem_fc2;
-    float* mem_fc1;
-    float* mem_conv2;
-    float* mem_conv1;
-}Mementun;
-
-typedef struct
-{
-    Data datas;
-    int imageSize;
-    Paramerters params;
-    float* params_memory;
-    int toal_params;
-    Activation acts;
-    float* acts_memory;
-    int total_acts;
-    Grad_Activation grad_acts;
-    float* grad_acts_memory;
-    int total_grad_acts;
-
-    float* mementun_memory;
-    Mementun mementun;
-}CNN;
 
 void init_params(float*params, int size){
     float scale = sqrt(2.0f/size);
@@ -429,8 +335,6 @@ Shape fc_forward(float* inp, int inp_size, float* out, float* weights, int outpu
 
     return output_shape;
 }
-
-
 
 void softmax_forward(float* inp, int inp_size){
     float sum = 0.0f;
