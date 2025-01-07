@@ -623,17 +623,11 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
         int new_row = out_size.x+2*(kernel_size-1), new_col = out_size.y+2*(kernel_size-1), new_channel = out_size.z; 
         float* full_conv_dloss = (float*)malloc(new_channel*new_row*new_col*sizeof(float));
 
-        for(int inp_c=0;inp_c<inp_size.z; inp_c++){
-            float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
-            for(int i=0;i<inp_h*inp_w;i++){
-                d_inp_c[i] = 0.0f;
-            }
-        }
-
         for(int z=0;z<out_z;z++){
             float* full_conv_dloss_z = full_conv_dloss + z*new_row*new_col;
             float* d_loss_z = d_loss + z*out_h*out_w;
-            float* conv_weights_z = conv_weights + z*kernel_size*kernel_size;
+            // 第z个卷积核的权重
+            float* conv_weights_z = conv_weights + z*inp_z*kernel_size*kernel_size;
             // full model padding
             for(int x=0;x<new_row;x++){
                 for(int y=0;y<new_col;y++){
@@ -648,15 +642,21 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
             for(int i=0;i<inp_size.x; i++){
                 for(int j=0;j<inp_size.y;j++){
                     float d_inp_ij = 0.0f;
-                    for (int k = 0; k < kernel_size; k++){
-                        for (int l = 0; l < kernel_size; l++){
-                            d_inp_ij += full_conv_dloss_z[(i+k)*new_col + j+l]*conv_weights_z[k*kernel_size+l];
-                        }
-                    }
-                    for(int inp_c=0;inp_c<inp_size.z; inp_c++){
+                    for(int inp_c=0;inp_c<inp_z;inp_c++){
+                        float* conv_weights_z_inp_c = conv_weights_z + inp_c*kernel_size*kernel_size;
                         float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
+                        for (int k = 0; k < kernel_size; k++){
+                            for (int l = 0; l < kernel_size; l++){
+                                d_inp_ij += full_conv_dloss_z[(i+k)*new_col + j+l]*
+                                            conv_weights_z_inp_c[(kernel_size-k-1)*kernel_size+kernel_size-l-1];
+                            }
+                        }
                         d_inp_c[i*inp_w+j] += d_inp_ij;
                     }
+/*                     for(int inp_c=0;inp_c<inp_size.z; inp_c++){
+                        float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
+                        d_inp_c[i*inp_w+j] += d_inp_ij;
+                    } */
                 }
             }
         }
@@ -664,12 +664,14 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
     }
 
     // update weights
-    for(int c=0;c<channel;c++){
-        for(int i=0;i<kernel_size;i++){
-            float* mementun_row = mementun + c*kernel_size*kernel_size + i*kernel_size;
-            float* conv_weights_row = conv_weights + c*kernel_size*kernel_size + i*kernel_size;
-            for(int j=0;j<kernel_size;j++){
-                conv_weights_row[j] -= mementun_row[j];
+    for (int out_c = 0; out_c < out_z; out_c++){
+        for(int c=0;c<channel;c++){
+            for(int i=0;i<kernel_size;i++){
+                float* mementun_row = mementun +out_c*inp_z*kernel_size*kernel_size + c*kernel_size*kernel_size + i*kernel_size;
+                float* conv_weights_row = conv_weights + out_c*inp_z*kernel_size*kernel_size + c*kernel_size*kernel_size + i*kernel_size;
+                for(int j=0;j<kernel_size;j++){
+                    conv_weights_row[j] -= mementun_row[j];
+                }
             }
         }
     }
