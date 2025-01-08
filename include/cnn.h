@@ -1,8 +1,12 @@
 #ifndef CNN_H
 #define CNN_H
 
-#include<stdlib.h>
-
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <time.h>
+#include <float.h>
+#include <stdbool.h>
 #include "dataloader.h"
 
 typedef struct{

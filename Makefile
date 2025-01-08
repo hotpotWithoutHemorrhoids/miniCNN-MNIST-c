@@ -13,7 +13,7 @@ TARGET = cnn
 # 源文件
 SRCS = $(wildcard *.c)
 OBJS = $(patsubst %.c, %.o, $(SRCS))
-INCLUDE= -I./src
+INCLUDE= -I./include
 
 
 # 生成目标文件
