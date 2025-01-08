@@ -1,4 +1,6 @@
 #ifndef DATALOADER_H
+#define DATALOADER_H
+
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
@@ -32,7 +34,23 @@ typedef struct {
     size_t image_bytes;
 } DataLoader;
 
-void shuffle_data(DataLoader* dataloader);
+void shuffle_data(DataLoader* dataloader){
+    if(dataloader->should_shuffer){
+        for(int i=dataloader->nImages-1; i>1; i--){
+            int j = rand() % i;
+            unsigned char* i_images = dataloader->images + i*dataloader->imageSize.row*dataloader->imageSize.col;
+            unsigned char* j_images = dataloader->images + j*dataloader->imageSize.row*dataloader->imageSize.col;
+            for(int k=0;k<dataloader->imageSize.row*dataloader->imageSize.col;k++){
+                unsigned char temp = i_images[k];
+                i_images[k] = j_images[k];
+                j_images[k] = temp;
+            }
+            int label_i = dataloader->labels[i];
+            dataloader->labels[i] = dataloader->labels[j];
+            dataloader->labels[j] = label_i;
+        }
+    }
+}
 
 void dataloader_init(DataLoader* dataloader, const char* images_path, const char* labels_path, int should_shuffer){
     dataloader->imagesfile = fopenCheck(images_path, "rb");
@@ -83,23 +101,7 @@ void DataLoader_clear(DataLoader *dataloader){
         free(dataloader->labels);
 }
 
-void shuffle_data(DataLoader* dataloader){
-    if(dataloader->should_shuffer){
-        for(int i=dataloader->nImages-1; i>1; i--){
-            int j = rand() % i;
-            unsigned char* i_images = dataloader->images + i*dataloader->imageSize.row*dataloader->imageSize.col;
-            unsigned char* j_images = dataloader->images + j*dataloader->imageSize.row*dataloader->imageSize.col;
-            for(int k=0;k<dataloader->imageSize.row*dataloader->imageSize.col;k++){
-                unsigned char temp = i_images[k];
-                i_images[k] = j_images[k];
-                j_images[k] = temp;
-            }
-            int label_i = dataloader->labels[i];
-            dataloader->labels[i] = dataloader->labels[j];
-            dataloader->labels[j] = label_i;
-        }
-    }
-}
+
 
 void load_betch_images(DataLoader* dataloader, Data* datas,int idx, int batch){
     unsigned char* images = dataloader->images + idx*batch*dataloader->imageSize.row*dataloader->imageSize.col;

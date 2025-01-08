@@ -1,45 +1,8 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <time.h>
-#include <float.h>
-#include <stdbool.h>
 #include "dataloader.h"
 #include "debug.h"
+#include "cnn.h"
 
 
-#define TRAIN_IMG_PATH "data/train-images.idx3-ubyte"
-#define TRAIN_LBL_PATH "data/train-labels.idx1-ubyte"
-
-#define INPUT_SIZE 784
-
-#define ImageSize 28
-#define K1 5
-#define C1 16
-#define P1 2
-#define K2 5
-#define C2 36
-#define P2 2
-#define FC1_SIZE 128
-#define OUTPUT_SIZE 10
-
-#define EPOCHS 10
-#define BATCH 1000
-#define TRAIN_SPLIT 0.8
-#define LEARN_RATE 0.001f
-#define MOMENTUM 0.9f
-
-typedef struct{
-    int x;
-    int y;
-    int z;
-} Shape;
-
-typedef struct
-{
-    Shape in_size;
-    Shape out_size;
-}Size;
 void init_size(Size *size, int in_x,int in_y,int in_z,int out_x,int out_y,int out_z){
     size->in_size.x = in_x;
     size->in_size.y = in_y;
@@ -48,16 +11,6 @@ void init_size(Size *size, int in_x,int in_y,int in_z,int out_x,int out_y,int ou
     size->out_size.y = out_y;
     size->out_size.z = out_z;
 }
-
-typedef struct{
-    float* weights;
-    Size size;
-    int kernel_size;
-    int stride;
-    int filters;
-    int weights_size;
-    int num_params;
-} Conv;
 
 void init_conv(Conv* conv, int in_x,int in_y, int in_channel, int kernel_size, int stride, int filters){
     conv->kernel_size = kernel_size;
@@ -70,25 +23,10 @@ void init_conv(Conv* conv, int in_x,int in_y, int in_channel, int kernel_size, i
     conv->weights = NULL;
 }
 
-typedef struct
-{
-    Size size;
-    int pool_size;
-}Pool;
-
 void init_pool(Pool* pool, int in_x, int in_y, int in_z, int pool_size){
     init_size(&(pool->size), in_x, in_y, in_z, in_x/pool_size, in_y/pool_size, in_z);
     pool->pool_size = pool_size;
 }
-
-typedef struct{
-    float* weights;
-    float* bias;
-    Size size;
-    int weight_size;
-    int bias_size;
-    int num_params;
-}FC;
 
 void init_fc(FC* fc, int in_size, int out_size){
     init_size(&(fc->size), 1, 1, in_size, 1, 1, out_size);
@@ -98,65 +36,6 @@ void init_fc(FC* fc, int in_size, int out_size){
     fc->weights = NULL;
     fc->bias = NULL;
 }
-
-typedef struct{
-    Conv conv1; // (K1,K1,C1)
-    Pool pool1;
-    Conv conv2; // (K2,K2,C2)
-    Pool pool2;
-    // Conv Conv3; // (K3,K3,C3)
-    FC fc1;
-    FC fc2;
-}Paramerters;
-
-typedef struct{
-    float* out_conv1; // ( (imageSize-K1)/stride + 1, (imageSize-K1)/stride + 1, C1)
-    Shape conv1_size;
-    float* out_pool1; // ( ((imageSize-K1)/stride + 1)/P1, ((imageSize-K1)/stride + 1)/P1, C1)
-    Shape pool1_size;
-    float* out_conv2; // ( ((imageSize-K1)/stride + 1)/P1 - K2)/stride + 1, ((imageSize-K1)/stride + 1)/P1 - K2)/stride + 1, C2)
-    Shape conv2_size;
-    float* out_pool2; // ( (((imageSize-K1)/stride + 1)/P1 - K2)/stride + 1)/P2, (((imageSize-K1)/stride + 1)/P1 - K2)/stride + 1)/P2, C2)
-    Shape pool2_size;
-    float* out_fc1; 
-    Shape fc_size;
-    float* out_fc2; // (1,1,10)
-    Shape output_size;
-}Activation;
-
-typedef struct{
-    float* grad_out_conv1;
-    float* grad_out_pool1;
-    float* grad_out_conv2;
-    float* grad_out_pool2;
-    float* grad_out_fc1;
-    float* grad_out_fc2;
-}Grad_Activation;
-
-typedef struct{
-    float* mem_fc2;
-    float* mem_fc1;
-    float* mem_conv2;
-    float* mem_conv1;
-}Mementun;
-
-typedef struct
-{
-    Data datas;
-    int imageSize;
-    Paramerters params;
-    float* params_memory;
-    int toal_params;
-    Activation acts;
-    float* acts_memory;
-    int total_acts;
-    Grad_Activation grad_acts;
-    float* grad_acts_memory;
-    int total_grad_acts;
-
-    float* mementun_memory;
-    Mementun mementun;
-}CNN;
 
 void init_params(float*params, int size){
     float scale = sqrt(2.0f/size);
@@ -407,7 +286,8 @@ Shape pool_froward(float* inp, int h, int w, int z, float* out, int pool_size){
 }
 
 
-Shape fc_forward(float* inp, int inp_size, float* out, float* weights, int output_size, float* bias, bool acti_func){
+Shape fc_forward(float* inp, int inp_size, float* out, 
+            float* weights, int output_size, float* bias, bool acti_func){
     Shape output_shape = {1,1,output_size};
 
     for(int i = 0; i<output_size; i++){
@@ -429,8 +309,6 @@ Shape fc_forward(float* inp, int inp_size, float* out, float* weights, int outpu
 
     return output_shape;
 }
-
-
 
 void softmax_forward(float* inp, int inp_size){
     float sum = 0.0f;
@@ -623,17 +501,11 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
         int new_row = out_size.x+2*(kernel_size-1), new_col = out_size.y+2*(kernel_size-1), new_channel = out_size.z; 
         float* full_conv_dloss = (float*)malloc(new_channel*new_row*new_col*sizeof(float));
 
-        for(int inp_c=0;inp_c<inp_size.z; inp_c++){
-            float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
-            for(int i=0;i<inp_h*inp_w;i++){
-                d_inp_c[i] = 0.0f;
-            }
-        }
-
         for(int z=0;z<out_z;z++){
             float* full_conv_dloss_z = full_conv_dloss + z*new_row*new_col;
             float* d_loss_z = d_loss + z*out_h*out_w;
-            float* conv_weights_z = conv_weights + z*kernel_size*kernel_size;
+            // 第z个卷积核的权重
+            float* conv_weights_z = conv_weights + z*inp_z*kernel_size*kernel_size;
             // full model padding
             for(int x=0;x<new_row;x++){
                 for(int y=0;y<new_col;y++){
@@ -648,15 +520,21 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
             for(int i=0;i<inp_size.x; i++){
                 for(int j=0;j<inp_size.y;j++){
                     float d_inp_ij = 0.0f;
-                    for (int k = 0; k < kernel_size; k++){
-                        for (int l = 0; l < kernel_size; l++){
-                            d_inp_ij += full_conv_dloss_z[(i+k)*new_col + j+l]*conv_weights_z[k*kernel_size+l];
-                        }
-                    }
-                    for(int inp_c=0;inp_c<inp_size.z; inp_c++){
+                    for(int inp_c=0;inp_c<inp_z;inp_c++){
+                        float* conv_weights_z_inp_c = conv_weights_z + inp_c*kernel_size*kernel_size;
                         float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
+                        for (int k = 0; k < kernel_size; k++){
+                            for (int l = 0; l < kernel_size; l++){
+                                d_inp_ij += full_conv_dloss_z[(i+k)*new_col + j+l]*
+                                            conv_weights_z_inp_c[(kernel_size-k-1)*kernel_size+kernel_size-l-1];
+                            }
+                        }
                         d_inp_c[i*inp_w+j] += d_inp_ij;
                     }
+/*                     for(int inp_c=0;inp_c<inp_size.z; inp_c++){
+                        float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
+                        d_inp_c[i*inp_w+j] += d_inp_ij;
+                    } */
                 }
             }
         }
@@ -664,12 +542,14 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
     }
 
     // update weights
-    for(int c=0;c<channel;c++){
-        for(int i=0;i<kernel_size;i++){
-            float* mementun_row = mementun + c*kernel_size*kernel_size + i*kernel_size;
-            float* conv_weights_row = conv_weights + c*kernel_size*kernel_size + i*kernel_size;
-            for(int j=0;j<kernel_size;j++){
-                conv_weights_row[j] -= mementun_row[j];
+    for (int out_c = 0; out_c < out_z; out_c++){
+        for(int c=0;c<channel;c++){
+            for(int i=0;i<kernel_size;i++){
+                float* mementun_row = mementun +out_c*inp_z*kernel_size*kernel_size + c*kernel_size*kernel_size + i*kernel_size;
+                float* conv_weights_row = conv_weights + out_c*inp_z*kernel_size*kernel_size + c*kernel_size*kernel_size + i*kernel_size;
+                for(int j=0;j<kernel_size;j++){
+                    conv_weights_row[j] -= mementun_row[j];
+                }
             }
         }
     }
@@ -706,9 +586,7 @@ void cnn_backward(CNN *model,float* inp,int label, float lr, int output_size){
 
 }
 
-
-int main(int argc, char const *argv[])
-{
+int main(int argc, char const *argv[]){ 
 
     clock_t start, end;
     srand(time(NULL));
