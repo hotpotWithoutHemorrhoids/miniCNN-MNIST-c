@@ -5,7 +5,7 @@
 
 extern inline void _print_vector(float* vec, int size){
     for(int i=0;i<size;i++){
-        printf("%.1f ", vec[i]);
+        printf("%.2f ", vec[i]);
     }
     printf("\n");
 }
@@ -14,7 +14,7 @@ extern inline void _print_vector(float* vec, int size){
 extern inline void _printMatrix(float* mat, int row, int col){
     for(int i=0;i<row;i++){
         for(int j=0;j<col;j++){
-            printf("%.1f ", mat[i*col+j]);
+            printf("%.2f ", mat[i*col+j]);
         }
         printf("\n");
     }

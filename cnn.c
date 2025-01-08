@@ -3,27 +3,6 @@
 #include "cnn.h"
 
 
-#define TRAIN_IMG_PATH "data/train-images.idx3-ubyte"
-#define TRAIN_LBL_PATH "data/train-labels.idx1-ubyte"
-
-#define INPUT_SIZE 784
-
-#define ImageSize 28
-#define K1 5
-#define C1 16
-#define P1 2
-#define K2 5
-#define C2 36
-#define P2 2
-#define FC1_SIZE 128
-#define OUTPUT_SIZE 10
-
-#define EPOCHS 10
-#define BATCH 1000
-#define TRAIN_SPLIT 0.8
-#define LEARN_RATE 0.001f
-#define MOMENTUM 0.9f
-
 void init_size(Size *size, int in_x,int in_y,int in_z,int out_x,int out_y,int out_z){
     size->in_size.x = in_x;
     size->in_size.y = in_y;
@@ -307,7 +286,8 @@ Shape pool_froward(float* inp, int h, int w, int z, float* out, int pool_size){
 }
 
 
-Shape fc_forward(float* inp, int inp_size, float* out, float* weights, int output_size, float* bias, bool acti_func){
+Shape fc_forward(float* inp, int inp_size, float* out, 
+            float* weights, int output_size, float* bias, bool acti_func){
     Shape output_shape = {1,1,output_size};
 
     for(int i = 0; i<output_size; i++){
@@ -606,9 +586,7 @@ void cnn_backward(CNN *model,float* inp,int label, float lr, int output_size){
 
 }
 
-
-int main(int argc, char const *argv[])
-{
+int main(int argc, char const *argv[]){ 
 
     clock_t start, end;
     srand(time(NULL));

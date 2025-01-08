@@ -9,6 +9,27 @@
 #include <stdbool.h>
 #include "dataloader.h"
 
+#define TRAIN_IMG_PATH "data/train-images.idx3-ubyte"
+#define TRAIN_LBL_PATH "data/train-labels.idx1-ubyte"
+
+#define INPUT_SIZE 784
+
+#define ImageSize 28
+#define K1 5
+#define C1 16
+#define P1 2
+#define K2 5
+#define C2 36
+#define P2 2
+#define FC1_SIZE 128
+#define OUTPUT_SIZE 10
+
+#define EPOCHS 10
+#define BATCH 1000
+#define TRAIN_SPLIT 0.8
+#define LEARN_RATE 0.001f
+#define MOMENTUM 0.9f
+
 typedef struct{
     int x;
     int y;
