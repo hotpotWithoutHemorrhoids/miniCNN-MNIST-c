@@ -36,7 +36,9 @@ Shape fc_forward(float* inp, int inp_size, float* out,
 }
 
 
-void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, float* weights, float* bias, float* d_inp, float* mementun, float lr, bool acti_func){
+void fc_backward(float* inp, Shape inp_size, float* d_loss,
+                Shape out_size, float* weights, float* bias,
+                float* d_inp, float* mementun, float lr, bool acti_func){
     /* 
         weights: (inp_len, out_len) 
     */

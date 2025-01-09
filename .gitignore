@@ -28,9 +28,10 @@
 # 提交.c文件
 !*.c
 !*.cpp
-
 # 提交.h文件
 !*.h
+
+!*.py
 
 # 提交Makefile
 !Makefile

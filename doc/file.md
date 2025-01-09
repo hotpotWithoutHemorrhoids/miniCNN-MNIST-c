@@ -233,8 +233,6 @@ i: 0 , j: 0
 
 
 
-
-
 >reference:
 >
 >[Numpy实现神经网络框架(9)——卷积层反向传播推导及实现](https://zhuanlan.zhihu.com/p/70246295)
