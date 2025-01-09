@@ -114,8 +114,6 @@ void test_fc_forward(){
     fc_forward(a, 16,fc_out, w,10,bias,0);
     CU_ASSERT_TRUE(compare_float_arr(fc_out, target_out, 10, EPSILON));
 
-
-
     fc_forward(a, 16,fc_out, w,10,bias,1);
     CU_ASSERT_TRUE(compare_float_arr(fc_out, target_relu_out, 10, EPSILON));
     printf("fc_out\n");
