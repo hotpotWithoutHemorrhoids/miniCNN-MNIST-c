@@ -9,6 +9,11 @@
 !src/**/*
 !include/
 
+# python文件
+!/py
+!*.py
+!/py/*.txt
+
 !doc/
 !doc/**/*
 

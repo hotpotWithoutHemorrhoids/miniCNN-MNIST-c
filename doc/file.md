@@ -197,10 +197,39 @@ w_{12} & w_{11} \\
 \end{pmatrix}
 $$
 
+3. 得到结果：
+
+$$
+\begin{pmatrix}
+\frac{\partial L}{\partial o_{11}}w_{11} & \frac{\partial L}{\partial o_{11}}w_{12} + \frac{\partial L}{\partial o_{12}}w_{11} & \frac{\partial L}{\partial o_{12}}w_{12} \\
+\frac{\partial L}{\partial o_{11}}w_{21}+\frac{\partial L}{\partial o_{21}}w_{11} & \frac{\partial L}{\partial o_{11}}w_{22}+\frac{\partial L}{\partial o_{12}}w_{21}+\frac{\partial L}{\partial o_{21}}w_{12}+\frac{\partial L}{\partial o_{22}}w_{11} & 
+\frac{\partial L}{\partial o_{12}}w_{22}+\frac{\partial L}{\partial o_{22}}w_{12}\\
+
+\frac{\partial L}{\partial o_{21}}w_{21} & 
+\frac{\partial L}{\partial o_{21}}w_{22} + \frac{\partial L}{\partial o_{22}}w_{21} & 
+\frac{\partial L}{\partial o_{22}}w_{22}
+\end{pmatrix}
+$$
 
 
 
+K=2
 
+i: 0 , j: 0
+
+- k=0
+
+  - l=0
+    (0,0)
+
+  - l=1
+
+    (0, 0)
+
+- k=1
+
+  - l=0
+    ()
 
 
 

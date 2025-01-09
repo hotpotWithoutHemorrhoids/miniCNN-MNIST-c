@@ -467,7 +467,7 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
         }}
     
     // update mementun
-    for(int c=0;c<channel;c++){
+/*     for(int c=0;c<channel;c++){
         for(int i=0;i<kernel_size;i++){
             // float* conv_weights_row = conv_weights + c*kernel_size*kernel_size + i*kernel_size;
             for(int j=0;j<kernel_size;j++){
@@ -480,13 +480,40 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
                                 grad_w_ij += inp_c_image[(i*stride+l)*out_w+j*stride+k]*d_loss[c*out_h*out_w + l*out_w + k];
                         }
                     }
-                mementun_row[j] = mementun_row[j]*MOMENTUM + lr*grad_w_ij;
+                // mementun_row[j] = mementun_row[j]*MOMENTUM + lr*grad_w_ij;
+                mementun_row[j] = grad_w_ij;
+
                 // conv_weights_row[j] += mementun_row[j];
             }
         }
         }
         
-    }
+    } */
+   for (int c = 0; c < out_z; c++){
+        // 第c个conv kernel
+        for(int i=0;i<kernel_size; i++){
+            for(int j=0;j<kernel_size;j++){
+                // kernel loc (i,j)
+                for(int inp_c=0;inp_c<inp_z;inp_c++){
+                    // inp_c's matrix in the conv kernel map to inp_c's inp channel
+                    float* inp_channel = inp + inp_c*inp_h*inp_w;
+                    float* mementun_c = mementun + c*inp_z*inp_h*inp_w + inp_c*inp_h*inp_w;
+                    float* d_loss_c = d_loss + c*out_h*out_w;
+                    float grad_w_ij = 0.0f;
+                    for(int l=0; l<out_h; l++){
+                        for(int k=0; k<out_w; k++){
+                            grad_w_ij += inp_channel[(l+i)*inp_w+(k+j)]*d_loss_c[l*out_w+k];
+                        }
+                    }
+                    mementun_c[i*kernel_size+j] = mementun_c[i*kernel_size+j]*MOMENTUM+ lr*grad_w_ij;
+                    // mementun_c[i*kernel_size+j] = grad_w_ij;
+                }
+
+            }
+        }
+    
+   }
+   
 
 
     /* 
