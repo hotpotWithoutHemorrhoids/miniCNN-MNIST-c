@@ -110,7 +110,7 @@ void test_fc_forward(){
     
     float fc_out[10] = {0.0f};
     printf("w:\n");
-    printMatrix(w, 16,10);
+    printMatrix(w, 16,10, "w");
     printf("\n");
     
     fc_forward(a, 16,fc_out, w,10,bias,0);
@@ -119,9 +119,9 @@ void test_fc_forward(){
     fc_forward(a, 16,fc_out, w,10,bias,1);
     CU_ASSERT_TRUE(compare_float_arr(fc_out, target_relu_out, 10, EPSILON));
     printf("fc_out\n");
-    printVector(fc_out, 10);
+    printVector(fc_out, 10, "fc_out");
     printf("target_out\n");
-    printVector(target_relu_out, 10);
+    printVector(target_relu_out, 10, "target_out");
 }
 
 void test_fc_backward(){

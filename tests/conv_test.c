@@ -128,8 +128,6 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
     
    }
    
-
-
     /* 
         for one channel
         suspect input size: (X,Y), kernel_size:K, stride: s=1,
@@ -157,28 +155,30 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
             // printMatrix(full_conv_dloss,new_row, new_col,"full_conv_dloss");
             // printMatrix(d_loss_z,out_h, out_w,"d_loss_z");
 
-                for(int i=0;i<inp_size.x; i++){
-                    for(int j=0;j<inp_size.y;j++){
-                        float d_inp_ij = 0.0f;
-                        for(int inp_c=0;inp_c<inp_z;inp_c++){
-                            float* conv_weights_z_inp_c = conv_weights_z + inp_c*kernel_size*kernel_size;
-                            float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
-                        
-                        
-                            for (int k = 0; k < kernel_size; k++){
-                                for (int l = 0; l < kernel_size; l++){
-                                    d_inp_ij += full_conv_dloss[(i+k)*new_col + j+l]*
-                                                conv_weights_z_inp_c[(kernel_size-k-1)*kernel_size+kernel_size-l-1];
-                                }
+            for(int i=0;i<inp_size.x; i++){
+                for(int j=0;j<inp_size.y;j++){
+                    float d_inp_ij = 0.0f;
+                    for(int inp_c=0;inp_c<inp_z;inp_c++){
+                        float* conv_weights_z_inp_c = conv_weights_z + inp_c*kernel_size*kernel_size;
+                        printf("out z: %d, inp_c: %d inp_z: %d\n", z, inp_c, inp_z);
+                        printMatrix(conv_weights_z_inp_c, kernel_size,kernel_size, "conv_weights");
+                        float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
+                    
+                    
+                        for (int k = 0; k < kernel_size; k++){
+                            for (int l = 0; l < kernel_size; l++){
+                                d_inp_ij += full_conv_dloss[(i+k)*new_col + j+l]*
+                                            conv_weights_z_inp_c[(kernel_size-k-1)*kernel_size+kernel_size-l-1];
                             }
-                            d_inp_c[i*inp_w+j] += d_inp_ij;
                         }
-    /*                     for(int inp_c=0;inp_c<inp_size.z; inp_c++){
-                            float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
-                            d_inp_c[i*inp_w+j] += d_inp_ij;
-                        } */
+                        d_inp_c[i*inp_w+j] += d_inp_ij;
                     }
-            }
+/*                     for(int inp_c=0;inp_c<inp_size.z; inp_c++){
+                        float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
+                        d_inp_c[i*inp_w+j] += d_inp_ij;
+                    } */
+                }
+        }
         }
         free(full_conv_dloss);
     }
@@ -303,7 +303,7 @@ int clean_suite(void) {
 }
 
 
-// 编译：  gcc fc_layer_test.c -o fc_layer_test -I../include -lcunit
+// 编译：  gcc conv_test.c -o conv_test -I../include -lcunit
 int main(){   
     // 初始化
     if(CUE_SUCCESS != CU_initialize_registry())
