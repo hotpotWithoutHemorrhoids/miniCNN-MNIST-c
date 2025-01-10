@@ -18,7 +18,7 @@ extern inline void _printMatrix(float* mat, int row, int col, const char* desc){
     printf("\n %s\n", desc);
     for(int i=0;i<row;i++){
         for(int j=0;j<col;j++){
-            printf("%.2f ", mat[i*col+j]);
+            printf("%.2f, ", mat[i*col+j]);
         }
         printf("\n");
     }
