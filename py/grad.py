@@ -32,11 +32,15 @@ def conv(in_shape=(2,3,3), kernelsize=(2,2), out_channel=2, outsize=2):
     target[idx] = 1.0
     print(f"target: {target}")
     loss = F.cross_entropy(fc_out, target)
-    print((f"cross_entropy: {loss}"))
+    print(f"cross_entropy: {loss}")
     loss.register_hook(partial(cout_grad, layer="cross_entropy"))
     loss.backward()
     print(f"diff fc weight: {fc_weights.grad.flatten()}")
     print(f"diff inp_x: {inp_x.grad.flatten()} \n\n diff conv weight: {kernel_weight.grad.flatten()}")
+
+def pool():
+    pass
+
 
 if __name__ == "__main__":
     conv()

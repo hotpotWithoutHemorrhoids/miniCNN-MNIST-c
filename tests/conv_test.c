@@ -151,41 +151,31 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
                 }
            }
            
-            // printf("z: %d\n", z);
-            // printMatrix(full_conv_dloss,new_row, new_col,"full_conv_dloss");
-            // printMatrix(d_loss_z,out_h, out_w,"d_loss_z");
 
-            for(int i=0;i<inp_size.x; i++){
-                for(int j=0;j<inp_size.y;j++){
-                    float d_inp_ij = 0.0f;
-                    for(int inp_c=0;inp_c<inp_z;inp_c++){
-                        float* conv_weights_z_inp_c = conv_weights_z + inp_c*kernel_size*kernel_size;
-                        printf("out z: %d, inp_c: %d inp_z: %d\n", z, inp_c, inp_z);
-                        printMatrix(conv_weights_z_inp_c, kernel_size,kernel_size, "conv_weights");
-                        float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
-                    
-                    
-                        for (int k = 0; k < kernel_size; k++){
-                            for (int l = 0; l < kernel_size; l++){
-                                d_inp_ij += full_conv_dloss[(i+k)*new_col + j+l]*
-                                            conv_weights_z_inp_c[(kernel_size-k-1)*kernel_size+kernel_size-l-1];
+           for(int inp_c=0; inp_c<inp_z; inp_c++){
+                float* conv_weights_z_inpc = conv_weights_z + inp_c*kernel_size*kernel_size;
+                float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
+                for(int i=0;i<inp_h; i++){
+                    for(int j=0;j<inp_w; j++){
+                        float d_inp_ij = 0.0f;
+
+                        for(int l=0;l<kernel_size;l++){
+                            for (int k = 0; k < kernel_size; k++){
+                                d_inp_ij += full_conv_dloss[(i+l)*new_col + (j+k)]*
+                                            conv_weights_z_inpc[(kernel_size-l-1)*kernel_size + (kernel_size-k-1)];
                             }
                         }
                         d_inp_c[i*inp_w+j] += d_inp_ij;
                     }
-/*                     for(int inp_c=0;inp_c<inp_size.z; inp_c++){
-                        float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
-                        d_inp_c[i*inp_w+j] += d_inp_ij;
-                    } */
                 }
-        }
+           }
         }
         free(full_conv_dloss);
     }
 
     // update weights
     for (int out_c = 0; out_c < out_z; out_c++){
-        for(int c=0;c<channel;c++){
+        for(int c=0;c<out_z;c++){
             for(int i=0;i<kernel_size;i++){
                 float* mementun_row = mementun +out_c*inp_z*kernel_size*kernel_size + c*kernel_size*kernel_size + i*kernel_size;
                 float* conv_weights_row = conv_weights + out_c*inp_z*kernel_size*kernel_size + c*kernel_size*kernel_size + i*kernel_size;
@@ -251,7 +241,7 @@ void test_conv_backward(){
 }
 
 
-
+// 2 inpt channel, 2 output channel
 void test_conv_backward_1(){
     Shape inp_shape={3,3,2};
     float x[] = {-0.9414,  1.2632,  0.0031, -0.1535,  1.1396, -0.2302,  1.1877,  0.7677,
@@ -273,7 +263,7 @@ void test_conv_backward_1(){
     float target_dkernel_weight[] = {-0.3587,  0.0783, -0.2587,  0.1219,  0.2198,  0.0556, -0.2594,  0.2682,
         -0.6161,  0.1841, -0.3432,  0.3412, -0.1338,  0.3397, -0.9300,  0.7120};
 
-    int kernel_size=2, stride=1, out_channel=1;
+    int kernel_size=2, stride=1, out_channel=2;
     
     conv_backward(x, inp_shape, d_loss, out_shape, 
                 target_out,d_inp, kernel_weight,d_kernel_weight,
@@ -288,8 +278,6 @@ void test_conv_backward_1(){
     // printVector(target_dkernel_weight, kernel_len, "target_dkernel_weight");
 
 }
-
-
 
 
 // 初始化测试套件

@@ -2,6 +2,7 @@
 #include "debug.h"
 #include "cnn.h"
 
+// #define LOG true
 
 void init_size(Size *size, int in_x,int in_y,int in_z,int out_x,int out_y,int out_z){
     size->in_size.x = in_x;
@@ -258,6 +259,14 @@ Shape conv_forward(float *inp, Shape in_shape,float* out, float* conv_weights, i
             }
         }
     }
+    #ifdef LOG
+    for(int i=0;i<channel; i++){
+        char buff[50];
+        snprintf(buff, sizeof(buff), "conv forward result, channel %d", i);
+        printMatrix(out, out_h, out_w, buff);
+    }
+    printf("===================================\n");
+    #endif
     return output_shape;
 }
 
@@ -282,6 +291,15 @@ Shape pool_froward(float* inp, int h, int w, int z, float* out, int pool_size){
             }
         }
     }
+
+    #ifdef LOG
+    for(int i=0;i<z; i++){
+        char buff[50];
+        snprintf(buff, sizeof(buff), "pool_froward result, channel %d", i);
+        printMatrix(out, out_h, out_w, buff);
+    }
+    printf("===================================\n");
+    #endif
     return output_shape;
 }
 
@@ -307,6 +325,13 @@ Shape fc_forward(float* inp, int inp_size, float* out,
         }
     }
 
+    #ifdef LOG
+
+    char buff[50] = "fc_forward result";
+    printVector(out, output_size, buff);
+
+    printf("===================================\n");
+    #endif
     return output_shape;
 }
 
@@ -324,8 +349,13 @@ void softmax_forward(float* inp, int inp_size){
     for (int i = 0; i < inp_size; i++){
         inp[i] *= inv_sum;
     }
-    // printf("softmax sum: %f, inp_size: %d, max: %f\n", sum, inp_size, max);
-    // printVector(inp, inp_size);
+
+    #ifdef LOG
+    printf("softmax sum: %f, inp_size: %d, max: %f\n", sum, inp_size, max);
+    printVector(inp, inp_size, "softmax_forward");
+    printf("===================================\n");
+    #endif
+
     return;
 }
    
@@ -334,6 +364,7 @@ void cnn_forward(CNN *model, float* inp, int h, int w){
     Paramerters* params = &(model->params);
     conv_forward(inp,params->conv1.size.in_size, 
                 acts->out_conv1, params->conv1.weights, params->conv1.kernel_size, params->conv1.stride, params->conv1.filters);
+    
     pool_froward(acts->out_conv1,
                 params->conv1.size.out_size.y,params->conv1.size.out_size.x, params->conv1.size.out_size.z,
                 acts->out_pool1, params->pool1.pool_size);
@@ -355,11 +386,7 @@ void cnn_forward(CNN *model, float* inp, int h, int w){
 
 void softmax_backward(float* inp, int inp_size,int target, float* d_inp){
     for(int i=0;i<inp_size;i++){
-        if (i == target){
-            d_inp[i] = inp[i] - 1.0f;
-        }else{
-            d_inp[i] = inp[i];
-        }
+        d_inp[i] = inp[i] - (i==target?1.0f:0.0f);
     }
 }
 
@@ -491,31 +518,39 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
     } */
    for (int c = 0; c < out_z; c++){
         // 第c个conv kernel
-        for(int i=0;i<kernel_size; i++){
-            for(int j=0;j<kernel_size;j++){
-                // kernel loc (i,j)
-                for(int inp_c=0;inp_c<inp_z;inp_c++){
-                    // inp_c's matrix in the conv kernel map to inp_c's inp channel
-                    float* inp_channel = inp + inp_c*inp_h*inp_w;
-                    float* mementun_c = mementun + c*inp_z*inp_h*inp_w + inp_c*inp_h*inp_w;
-                    float* d_loss_c = d_loss + c*out_h*out_w;
-                    float grad_w_ij = 0.0f;
-                    for(int l=0; l<out_h; l++){
-                        for(int k=0; k<out_w; k++){
-                            grad_w_ij += inp_channel[(l+i)*inp_w+(k+j)]*d_loss_c[l*out_w+k];
-                        }
-                    }
-                    mementun_c[i*kernel_size+j] = mementun_c[i*kernel_size+j]*MOMENTUM+ lr*grad_w_ij;
-                    // mementun_c[i*kernel_size+j] = grad_w_ij;
-                }
+        for(int inp_c=0;inp_c<inp_z;inp_c++){
+            // inp_c's matrix in the conv kernel map to inp_c's inp channel
+            float* inp_channel = inp + inp_c*inp_h*inp_w;
+            float* mementun_c = mementun + c*inp_z*kernel_size*kernel_size + inp_c*kernel_size*kernel_size;
+            float* d_loss_c = d_loss + c*out_h*out_w;
 
-            }
+            for(int i=0;i<kernel_size; i++){
+                for(int j=0;j<kernel_size;j++){
+                    // kernel loc (i,j)
+
+                    /* TODO 对比一下看哪种顺序效率更快
+                    for(int inp_c=0;inp_c<inp_z;inp_c++){
+                        // inp_c's matrix in the conv kernel map to inp_c's inp channel
+                        float* inp_channel = inp + inp_c*inp_h*inp_w;
+                        float* mementun_c = mementun + c*inp_z*kernel_size*kernel_size + inp_c*kernel_size*kernel_size;
+                        float* d_loss_c = d_loss + c*out_h*out_w; */
+
+
+                        float grad_w_ij = 0.0f;
+                        for(int l=0; l<out_h; l++){
+                            for(int k=0; k<out_w; k++){
+                                grad_w_ij += inp_channel[(l+i)*inp_w+(k+j)]*d_loss_c[l*out_w+k];
+                            }
+                        }
+                        mementun_c[i*kernel_size+j] = mementun_c[i*kernel_size+j]*MOMENTUM + lr*grad_w_ij;
+                        // mementun_c[i*kernel_size+j] = grad_w_ij;
+                    }
+
+                }
         }
     
    }
    
-
-
     /* 
         for one channel
         suspect input size: (X,Y), kernel_size:K, stride: s=1,
@@ -525,58 +560,48 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
     */
     // update d_inp
     if(d_inp != NULL){
-        int new_row = out_size.x+2*(kernel_size-1), new_col = out_size.y+2*(kernel_size-1), new_channel = out_size.z; 
-        float* full_conv_dloss = (float*)malloc(new_channel*new_row*new_col*sizeof(float));
+        int new_row = out_size.x+2*(kernel_size-1), new_col = out_size.y+2*(kernel_size-1); 
+        float* full_conv_dloss = (float*)malloc(new_row*new_col*sizeof(float));
 
         for(int z=0;z<out_z;z++){
-            float* full_conv_dloss_z = full_conv_dloss + z*new_row*new_col;
             float* d_loss_z = d_loss + z*out_h*out_w;
             // 第z个卷积核的权重
             float* conv_weights_z = conv_weights + z*inp_z*kernel_size*kernel_size;
             // full model padding
-            for(int x=0;x<new_row;x++){
-                for(int y=0;y<new_col;y++){
-                    if (x<kernel_size-1 || x>=out_h+kernel_size-1 || y<kernel_size-1 || y>=out_w+kernel_size-1){
-                        full_conv_dloss_z[x*new_col+y] = 0.0f;
-                    }else{
-                        full_conv_dloss_z[x*new_col+y] = d_loss_z[(x-kernel_size+1)*out_w + y-kernel_size+1];
-                    }
+           for (int i = 0; i < out_h; i++){
+                for (int j = 0; j < out_w; j++){
+                    full_conv_dloss[(i+kernel_size-1)*new_col + (j+kernel_size-1)] = d_loss_z[i*out_w+j];
                 }
-            }
+           }
+           
+           for(int inp_c=0; inp_c<inp_z; inp_c++){
+                float* conv_weights_z_inpc = conv_weights_z + inp_c*kernel_size*kernel_size;
+                float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
+                for(int i=0;i<inp_h; i++){
+                    for(int j=0;j<inp_w; j++){
+                        float d_inp_ij = 0.0f;
 
-            for(int i=0;i<inp_size.x; i++){
-                for(int j=0;j<inp_size.y;j++){
-                    float d_inp_ij = 0.0f;
-                    for(int inp_c=0;inp_c<inp_z;inp_c++){
-                        float* conv_weights_z_inp_c = conv_weights_z + inp_c*kernel_size*kernel_size;
-                        float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
-                        for (int k = 0; k < kernel_size; k++){
-                            for (int l = 0; l < kernel_size; l++){
-                                d_inp_ij += full_conv_dloss_z[(i+k)*new_col + j+l]*
-                                            conv_weights_z_inp_c[(kernel_size-k-1)*kernel_size+kernel_size-l-1];
+                        for(int l=0;l<kernel_size;l++){
+                            for (int k = 0; k < kernel_size; k++){
+                                d_inp_ij += full_conv_dloss[(i+l)*new_col + (j+k)]*
+                                            conv_weights_z_inpc[(kernel_size-l-1)*kernel_size + (kernel_size-k-1)];
                             }
                         }
                         d_inp_c[i*inp_w+j] += d_inp_ij;
                     }
-/*                     for(int inp_c=0;inp_c<inp_size.z; inp_c++){
-                        float* d_inp_c = d_inp + inp_c*inp_h*inp_w;
-                        d_inp_c[i*inp_w+j] += d_inp_ij;
-                    } */
                 }
-            }
+           }
         }
         free(full_conv_dloss);
     }
 
     // update weights
     for (int out_c = 0; out_c < out_z; out_c++){
-        for(int c=0;c<channel;c++){
-            for(int i=0;i<kernel_size;i++){
-                float* mementun_row = mementun +out_c*inp_z*kernel_size*kernel_size + c*kernel_size*kernel_size + i*kernel_size;
-                float* conv_weights_row = conv_weights + out_c*inp_z*kernel_size*kernel_size + c*kernel_size*kernel_size + i*kernel_size;
-                for(int j=0;j<kernel_size;j++){
-                    conv_weights_row[j] -= mementun_row[j];
-                }
+        for(int c=0;c<inp_z;c++){
+            float* mementun_mat = mementun + out_c*inp_z*kernel_size*kernel_size + c*kernel_size*kernel_size;
+            float* conv_weights_mat = conv_weights + out_c*inp_z*kernel_size*kernel_size + c*kernel_size*kernel_size;
+            for(int i=0;i<kernel_size*kernel_size; i++){
+                conv_weights_mat[i] -= mementun_mat[i];
             }
         }
     }
@@ -628,39 +653,41 @@ int main(int argc, char const *argv[]){
     printf("train_size: %d, test_size: %d\n", train_size, test_size);
 
         
-    for(int b=0;b<train_size/BATCH;b++){
+    // for(int b=0;b<train_size/BATCH;b++){
         start = clock();
             // float* images = dataloader.images + b*BATCH*ImageSize*ImageSize;
-        load_betch_images(&dataloader, &model.datas, b, BATCH);
+        load_betch_images(&dataloader, &model.datas, 0, BATCH);
         float loss = 0.0f;
         float corr = 0.0f;
-        for (int t = 0; t < BATCH; t++){
+        // for (int t = 0; t < BATCH; t++){
+            int t=5;
             float* images = model.datas.data + t*ImageSize*ImageSize;
+            printMatrix(images, ImageSize,ImageSize, "image");
             int label_idx = model.datas.labels[t];
             // printf("label: %d\n", label_idx);
             cnn_forward(&model,images,dataloader.imageSize.row,dataloader.imageSize.col);
             
             loss -= logf(model.acts.out_fc2[label_idx] + 1e-10f);
-            // printf("label: %d, output: %f\n", label_idx, model.acts.out_fc2[label_idx]);
+            printf("label: %d, output: %f\n", label_idx, model.acts.out_fc2[label_idx]);
             // TODO backward maybe question
             initialize_memory(model.grad_acts_memory, model.total_grad_acts);
             cnn_backward(&model,images, label_idx, LEARN_RATE, model.params.fc2.size.out_size.z);
             corr += model.acts.out_fc2[label_idx]>0.5f?1.0f:0.0f;
-        }
+        // }
         end = clock();
             // loss = 0.0f;
-        printf("batch:%d,  loss:%.3f  corr: %.3f  cost time: %.3f\n", b, loss/BATCH, corr/BATCH, (float)(end-start)/CLOCKS_PER_SEC);
+        // printf("batch:%d,  loss:%.3f  corr: %.3f  cost time: %.3f\n", b, loss/BATCH, corr/BATCH, (float)(end-start)/CLOCKS_PER_SEC);
     
-    }
+    // }
 
-    float corr = 0.0f;
-    for(int t=0;t<test_size;t++){    
-        float* test_images = dataloader.images + (train_size+t)*ImageSize*ImageSize;
-        int test_label_idx =  dataloader.labels[train_size+t];
-        cnn_forward(&model,test_images,dataloader.imageSize.row,dataloader.imageSize.col);
-        // printf("label: %d, output-prob: %f\n", test_label_idx, model.acts.out_fc2[test_label_idx]);
-        corr += model.acts.out_fc2[test_label_idx]>0.5f?1.0f:0.0f;
-    }
+    // float corr = 0.0f;
+    // for(int t=0;t<test_size;t++){    
+    //     float* test_images = dataloader.images + (train_size+t)*ImageSize*ImageSize;
+    //     int test_label_idx =  dataloader.labels[train_size+t];
+    //     cnn_forward(&model,test_images,dataloader.imageSize.row,dataloader.imageSize.col);
+    //     // printf("label: %d, output-prob: %f\n", test_label_idx, model.acts.out_fc2[test_label_idx]);
+    //     corr += model.acts.out_fc2[test_label_idx]>0.5f?1.0f:0.0f;
+    // }
     
     printf("test accuracy: %f\n", corr/test_size);
 
