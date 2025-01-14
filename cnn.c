@@ -342,10 +342,10 @@ void softmax_forward(float* inp, int inp_size){
         max = max>inp[i]?max:inp[i];
     }
     for(int i=0;i<inp_size;i++){
-        inp[i] = exp(inp[i]-max);
+        inp[i] = expf(inp[i]-max);
         sum += inp[i];
     }
-    float inv_sum = sum!=0.0f? 1.0f/sum :1.0f;
+    float inv_sum = sum!=0.0f? 1.0f/(sum+EPSILON) :1.0f;
     for (int i = 0; i < inp_size; i++){
         inp[i] *= inv_sum;
     }
@@ -652,44 +652,45 @@ int main(int argc, char const *argv[]){
     int test_size = dataloader.nImages - train_size;
     printf("train_size: %d, test_size: %d\n", train_size, test_size);
 
-        
-    // for(int b=0;b<train_size/BATCH;b++){
-        start = clock();
+    // for (int epoch = 0; epoch < EPOCHS; epoch++){
+        for(int b=0;b<train_size/BATCH;b++){
+            start = clock();
             // float* images = dataloader.images + b*BATCH*ImageSize*ImageSize;
-        load_betch_images(&dataloader, &model.datas, 0, BATCH);
-        float loss = 0.0f;
-        float corr = 0.0f;
-        // for (int t = 0; t < BATCH; t++){
-            int t=5;
-            float* images = model.datas.data + t*ImageSize*ImageSize;
-            printMatrix(images, ImageSize,ImageSize, "image");
-            int label_idx = model.datas.labels[t];
-            // printf("label: %d\n", label_idx);
-            cnn_forward(&model,images,dataloader.imageSize.row,dataloader.imageSize.col);
-            
-            loss -= logf(model.acts.out_fc2[label_idx] + 1e-10f);
-            printf("label: %d, output: %f\n", label_idx, model.acts.out_fc2[label_idx]);
-            // TODO backward maybe question
-            initialize_memory(model.grad_acts_memory, model.total_grad_acts);
-            cnn_backward(&model,images, label_idx, LEARN_RATE, model.params.fc2.size.out_size.z);
-            corr += model.acts.out_fc2[label_idx]>0.5f?1.0f:0.0f;
-        // }
-        end = clock();
-            // loss = 0.0f;
-        // printf("batch:%d,  loss:%.3f  corr: %.3f  cost time: %.3f\n", b, loss/BATCH, corr/BATCH, (float)(end-start)/CLOCKS_PER_SEC);
-    
-    // }
+            load_betch_images(&dataloader, &model.datas, b, BATCH);
+            float loss = 0.0f;
+            float corr = 0.0f;
+            for (int t = 0; t < BATCH; t++){
+                float* images = model.datas.data + t*ImageSize*ImageSize;
+                // printMatrix(images, ImageSize,ImageSize, "image");
+                int label_idx = model.datas.labels[t];
+                // printf("label: %d\n", label_idx);
+                cnn_forward(&model,images,dataloader.imageSize.row,dataloader.imageSize.col);
+                
+                loss -= logf(model.acts.out_fc2[label_idx] + 1e-10f);
+                // printf("label: %d, output: %f\n", label_idx, model.acts.out_fc2[label_idx]);
+                // printVector(model.acts.out_fc2, 10, "out_fc2");
+                // TODO backward maybe question
+                initialize_memory(model.grad_acts_memory, model.total_grad_acts);
+                cnn_backward(&model,images, label_idx, LEARN_RATE, model.params.fc2.size.out_size.z);
+                corr += model.acts.out_fc2[label_idx]>0.5f?1.0f:0.0f;
+            }
+            end = clock();
+                // loss = 0.0f;
+            printf(" batch:%d,  loss:%.3f  corr: %.3f  cost time: %.3f\n", b, loss/BATCH, corr/BATCH, (float)(end-start)/CLOCKS_PER_SEC);
+        }
 
-    // float corr = 0.0f;
-    // for(int t=0;t<test_size;t++){    
-    //     float* test_images = dataloader.images + (train_size+t)*ImageSize*ImageSize;
-    //     int test_label_idx =  dataloader.labels[train_size+t];
-    //     cnn_forward(&model,test_images,dataloader.imageSize.row,dataloader.imageSize.col);
-    //     // printf("label: %d, output-prob: %f\n", test_label_idx, model.acts.out_fc2[test_label_idx]);
-    //     corr += model.acts.out_fc2[test_label_idx]>0.5f?1.0f:0.0f;
-    // }
+    float corr = 0.0f;
+    for(int t=0;t<test_size;t++){    
+        float* test_images = dataloader.images + (train_size+t)*ImageSize*ImageSize;
+        int test_label_idx =  dataloader.labels[train_size+t];
+        cnn_forward(&model,test_images,dataloader.imageSize.row,dataloader.imageSize.col);
+        // printf("label: %d, output-prob: %f\n", test_label_idx, model.acts.out_fc2[test_label_idx]);
+        corr += model.acts.out_fc2[test_label_idx]>0.5f?1.0f:0.0f;
+    }
     
     printf("test accuracy: %f\n", corr/test_size);
+    // }
+
 
     DataLoader_clear(&dataloader);
     CNN_clear(&model);
