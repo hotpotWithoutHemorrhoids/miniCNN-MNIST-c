@@ -38,8 +38,30 @@ def conv(in_shape=(2,3,3), kernelsize=(2,2), out_channel=2, outsize=2):
     print(f"diff fc weight: {fc_weights.grad.flatten()}")
     print(f"diff inp_x: {inp_x.grad.flatten()} \n\n diff conv weight: {kernel_weight.grad.flatten()}")
 
-def pool():
-    pass
+def pool(in_shape=(3,6,6), kernel_size=2, stride=2, output_size = 2):
+    inp_x = torch.randn(1, *in_shape, requires_grad=True)
+    print(f"in_shape: {inp_x.shape} inpx  : {inp_x.flatten()}")
+    pool_out = F.max_pool2d(inp_x,kernel_size, stride)
+    pool_out.register_hook(partial(cout_grad,layer="pool"))
+
+    print(f"out_shape {pool_out.shape}, pool_out: {pool_out.flatten()}")
+
+    pool_out_len = pool_out.size().numel()
+    fc_weights = torch.randn(output_size, pool_out_len, requires_grad=True)
+    print(f"fc_weights: {fc_weights}")
+    fc_out = F.linear(pool_out.flatten(), fc_weights)
+    print(f"fc_out: {fc_out}")
+
+    target = torch.zeros(output_size)
+    idx = random.randint(0, output_size-1)
+    target[idx] = 1.0
+
+    loss = F.cross_entropy(fc_out, target)
+    print(f"target: {target}  cross_entropy: {loss}")
+    loss.backward()
+    # print(f"diff fc_out: {fc_out.grad}")
+    # print(f"diff pool_ouut: {pool_out.grad}")
+    print(f"diff inp: {inp_x.grad.flatten()}")
 
 
 if __name__ == "__main__":
