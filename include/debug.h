@@ -8,7 +8,7 @@ extern inline void _print_vector(float* vec, int size, const char* desr){
         printf("\n%s \n", desr);
     }
     for(int i=0;i<size;i++){
-        printf("%.2f ", vec[i]);
+        printf("%.2f,", vec[i]);
     }
     printf("\n");
 }

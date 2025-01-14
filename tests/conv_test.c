@@ -276,7 +276,6 @@ void test_conv_backward_1(){
     CU_ASSERT_TRUE(compare_float_arr(d_kernel_weight, target_dkernel_weight, kernel_len,EPSILON));
     // printVector(d_kernel_weight, kernel_len, "d_kernel_weight");
     // printVector(target_dkernel_weight, kernel_len, "target_dkernel_weight");
-
 }
 
 
