@@ -312,22 +312,22 @@ Shape pool_froward(float* inp, int h, int w, int z, float* out, int pool_size){
 
 Shape fc_forward(float* inp, int inp_size, float* out, 
             float* weights, int output_size, float* bias, bool acti_func){
+    /*    
+        out = W * inp + bias
+        W: (out_size, inp_size) , inp: inp_size
+     */
     Shape output_shape = {1,1,output_size};
 
     for(int i = 0; i<output_size; i++){
         out[i] = bias[i];
     }
 
-    for(int i=0;i<inp_size; i++){
-        for(int j=0;j<output_size;j++){
-            out[j] += inp[i]*weights[i*output_size+j];
+    for(int i=0; i<output_size; i++){
+        for (int j = 0; j < inp_size; j++){
+            out[i] += inp[j]*weights[i*inp_size+j];
         }
-    }
-
-    // RELU
-    if(acti_func){
-        for(int i=0;i<output_size;i++){
-            out[i] = out[i]>0?out[i]:0.0f;
+        if(acti_func){
+            out[i] = out[i]>0?out[i] : 0;
         }
     }
 
@@ -343,7 +343,7 @@ Shape fc_forward(float* inp, int inp_size, float* out,
 
 void softmax_forward(float* inp, int inp_size){
     float sum = 0.0f;
-    float max = FLT_MIN;
+    float max = -FLT_MAX;
     for(int i=0;i<inp_size;i++){
         max = max>inp[i]?max:inp[i];
     }
@@ -383,11 +383,12 @@ void cnn_forward(CNN *model, float* inp, int h, int w){
     fc_forward(acts->out_pool2, params->pool2.size.out_size.x*params->pool2.size.out_size.y*params->pool2.size.out_size.z,
                 acts->out_fc1, params->fc1.weights, params->fc1.size.out_size.z,params->fc1.bias, true);
     // fc_forward(acts->fc, fc_shape.z, acts->output, model->params.output.weights, model->params.output.output_size);
+    // printVector(acts->out_fc1, params->fc1.size.out_size.z, "fc1 output");
     fc_forward(acts->out_fc1, params->fc1.size.out_size.z, 
-                acts->out_fc2, params->fc2.weights, params->fc2.size.out_size.z,params->fc2.bias, false);
-    // printVector(acts->out_fc2, params->fc2.size.out_size.z);
+                acts->out_fc2, params->fc2.weights, params->fc2.size.out_size.z,params->fc2.bias, true);
+    // printVector(acts->out_fc2, params->fc2.size.out_size.z, "forward before softmax");
     softmax_forward(acts->out_fc2, params->fc2.size.out_size.z);
-    // printVector(acts->out_fc2, params->fc2.size.out_size.z);
+    // printVector(acts->out_fc2, params->fc2.size.out_size.z, "forward after softmax");
 }
 
 void softmax_backward(float* inp, int inp_size,int target, float* d_inp){
@@ -396,7 +397,9 @@ void softmax_backward(float* inp, int inp_size,int target, float* d_inp){
     }
 }
 
-void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, float* weights, float* bias, float* d_inp, float* mementun, float lr, bool acti_func){
+void fc_backward(float* inp, Shape inp_size, float* d_loss,
+                Shape out_size, float* weights, float* bias,
+                float* d_inp, float* mementun, float lr, bool acti_func){
     /* 
         weights: (inp_len, out_len) 
     */
@@ -411,28 +414,35 @@ void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, floa
     }
 
     // update d_inp
-    for(int i=0;i<inp_len; i++){
-        for(int j=0;j<out_size.z;j++){
-            d_inp[i] += d_loss[j]*weights[i*out_size.z+j];
+    for (int i = 0; i < out_len; i++){
+        for (int j = 0; j < inp_len; j++){
+            d_inp[j] += weights[i*inp_len + j]*d_loss[i];
         }
     }
+
     float* weight_mementun = mementun;
     float* bias_mementun = mementun + inp_len*out_len;
 
     // update weights
-    for (int i = 0; i < inp_len ; i++){
-        float* weight_row = weights + i*out_size.z;
-        float* mementun_row = weight_mementun + i*out_size.z;
-        for (int j = 0; j < out_len; j++){
-            float gradW_ij = inp[i]*d_loss[j];
-            mementun_row[j] = mementun_row[j]*MOMENTUM + lr*gradW_ij;
-            weight_row[j] -= mementun_row[j];
-        }
+    for (int i = 0; i < out_len; i++){
+        float* weight_row = weights + i*inp_len;
+        float* mementun_row = weight_mementun + i*inp_len;
+        for (int j = 0; j < inp_len; j++){
+            float grad_w_ij = d_loss[i] * inp[j];
+            mementun_row[j] = mementun_row[j] * MOMENTUM + lr*grad_w_ij;
+            weight_row[j] -= mementun_row[j]; 
+            
+            // test
+            // mementun_row[j] = grad_w_ij;
+        }    
     }
-
+    
     for(int i=0;i<out_len; i++){
         bias_mementun[i] = bias_mementun[i]*MOMENTUM + lr*d_loss[i];
         bias[i] -= bias_mementun[i];
+        
+        // test
+        // bias_mementun[i] = d_loss[i];
     }
 }
 
@@ -624,7 +634,7 @@ void cnn_backward(CNN *model,float* inp,int label, float lr, int output_size){
     // printVector(grad_acts->grad_out_fc2, output_size);
 
     fc_backward(acts->out_fc1,params->fc2.size.in_size, grad_acts->grad_out_fc2,
-                 params->fc2.size.out_size,params->fc2.weights,params->fc2.bias, grad_acts->grad_out_fc1,mementun->mem_fc2,lr, false);
+                 params->fc2.size.out_size,params->fc2.weights,params->fc2.bias, grad_acts->grad_out_fc1,mementun->mem_fc2,lr, true);
 
     fc_backward(acts->out_pool2, params->fc2.size.in_size, grad_acts->grad_out_fc1,params->fc1.size.out_size,params->fc1.weights, params->fc1.bias,
                 grad_acts->grad_out_pool2, mementun->mem_fc1, lr, true);
