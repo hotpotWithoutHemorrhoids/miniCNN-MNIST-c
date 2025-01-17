@@ -368,8 +368,17 @@ void softmax_forward(float* inp, int inp_size){
 void cnn_forward(CNN *model, float* inp, int h, int w){
     Activation* acts = &(model->acts);
     Paramerters* params = &(model->params);
+    printShape(&(params->conv1.size.in_size), "conv1 in shape");
+    printShape(&(params->conv1.size.out_size), "conv1 out shape");
+    printVector(inp, params->conv1.size.in_size.x*params->conv1.size.in_size.y*params->conv1.size.in_size.z, "inp->conv1");
+
+    printf("conv1 kernel size: %d, stride: %d, fliters: %d \n", params->conv1.kernel_size, params->conv1.stride, params->conv1.filters);
+    printVector(params->conv1.weights, params->conv1.weights_size, "conv1 weights");
     conv_forward(inp,params->conv1.size.in_size, 
                 acts->out_conv1, params->conv1.weights, params->conv1.kernel_size, params->conv1.stride, params->conv1.filters);
+    printVector(acts->out_conv1, params->conv1.size.out_size.x*params->conv1.size.out_size.y*params->conv1.size.out_size.z, "acts->out_conv1");
+
+    
     
     pool_froward(acts->out_conv1,
                 params->conv1.size.out_size.y,params->conv1.size.out_size.x, params->conv1.size.out_size.z,
@@ -385,7 +394,7 @@ void cnn_forward(CNN *model, float* inp, int h, int w){
     // fc_forward(acts->fc, fc_shape.z, acts->output, model->params.output.weights, model->params.output.output_size);
     // printVector(acts->out_fc1, params->fc1.size.out_size.z, "fc1 output");
     fc_forward(acts->out_fc1, params->fc1.size.out_size.z, 
-                acts->out_fc2, params->fc2.weights, params->fc2.size.out_size.z,params->fc2.bias, true);
+                acts->out_fc2, params->fc2.weights, params->fc2.size.out_size.z,params->fc2.bias, false);
     // printVector(acts->out_fc2, params->fc2.size.out_size.z, "forward before softmax");
     softmax_forward(acts->out_fc2, params->fc2.size.out_size.z);
     // printVector(acts->out_fc2, params->fc2.size.out_size.z, "forward after softmax");
@@ -631,10 +640,10 @@ void cnn_backward(CNN *model,float* inp,int label, float lr, int output_size){
     float* output = acts->out_fc2;
     softmax_backward(output, output_size,label, grad_acts->grad_out_fc2);
 
-    // printVector(grad_acts->grad_out_fc2, output_size);
+    printVector(grad_acts->grad_out_fc2, output_size, "grad_out_fc2");
 
     fc_backward(acts->out_fc1,params->fc2.size.in_size, grad_acts->grad_out_fc2,
-                 params->fc2.size.out_size,params->fc2.weights,params->fc2.bias, grad_acts->grad_out_fc1,mementun->mem_fc2,lr, true);
+                 params->fc2.size.out_size,params->fc2.weights,params->fc2.bias, grad_acts->grad_out_fc1,mementun->mem_fc2,lr, false);
 
     fc_backward(acts->out_pool2, params->fc2.size.in_size, grad_acts->grad_out_fc1,params->fc1.size.out_size,params->fc1.weights, params->fc1.bias,
                 grad_acts->grad_out_pool2, mementun->mem_fc1, lr, true);
@@ -679,12 +688,12 @@ int main(int argc, char const *argv[]){
                 float* images = model.datas.data + t*ImageSize*ImageSize;
                 // printMatrix(images, ImageSize,ImageSize, "image");
                 int label_idx = model.datas.labels[t];
-                // printf("label: %d\n", label_idx);
+                printf("label: %d\n", label_idx);
                 cnn_forward(&model,images,dataloader.imageSize.row,dataloader.imageSize.col);
                 
                 loss -= logf(model.acts.out_fc2[label_idx] + 1e-10f);
-                // printf("label: %d, output: %f\n", label_idx, model.acts.out_fc2[label_idx]);
-                // printVector(model.acts.out_fc2, 10, "out_fc2");
+                // printf("label: %d, output: %.2f\n", label_idx, model.acts.out_fc2[label_idx]);
+                printVector(model.acts.out_fc2, 10, "out_fc2");
                 // TODO backward maybe question
                 initialize_memory(model.grad_acts_memory, model.total_grad_acts);
                 cnn_backward(&model,images, label_idx, LEARN_RATE, model.params.fc2.size.out_size.z);

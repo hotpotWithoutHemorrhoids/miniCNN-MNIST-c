@@ -37,6 +37,10 @@ typedef struct{
     int z;
 } Shape;
 
+void printShape(const Shape *s, const char* desc){
+    printf("%s shape x:%d, y: %d, z: %d\n", desc, s->x, s->y,s->z);
+}
+
 typedef struct
 {
     Shape in_size;

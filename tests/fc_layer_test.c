@@ -68,20 +68,20 @@ void fc_backward(float* inp, Shape inp_size, float* d_loss,
         float* mementun_row = weight_mementun + i*inp_len;
         for (int j = 0; j < inp_len; j++){
             float grad_w_ij = d_loss[i] * inp[j];
-            mementun_row[j] = mementun_row[j] * MOMENTUM + lr*grad_w_ij;
-            weight_row[j] -= mementun_row[j]; 
+            // mementun_row[j] = mementun_row[j] * MOMENTUM + lr*grad_w_ij;
+            // weight_row[j] -= mementun_row[j]; 
             
             // test
-            // mementun_row[j] = grad_w_ij;
+            mementun_row[j] = grad_w_ij;
         }    
     }
     
     for(int i=0;i<out_len; i++){
-        bias_mementun[i] = bias_mementun[i]*MOMENTUM + lr*d_loss[i];
-        bias[i] -= bias_mementun[i];
+        // bias_mementun[i] = bias_mementun[i]*MOMENTUM + lr*d_loss[i];
+        // bias[i] -= bias_mementun[i];
         
         // test
-        // bias_mementun[i] = d_loss[i];
+        bias_mementun[i] = d_loss[i];
     }
 }
 
