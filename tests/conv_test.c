@@ -139,6 +139,9 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
     if(d_inp != NULL){
         int new_row = out_size.x+2*(kernel_size-1), new_col = out_size.y+2*(kernel_size-1); 
         float* full_conv_dloss = (float*)malloc(new_row*new_col*sizeof(float));
+        for(int i=0;i<new_row*new_col; i++){
+            full_conv_dloss[i] = 0.0f;
+        }
 
         for(int z=0;z<out_z;z++){
             float* d_loss_z = d_loss + z*out_h*out_w;
