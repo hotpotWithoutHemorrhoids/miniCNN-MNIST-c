@@ -27,7 +27,7 @@
 #define EPOCHS 10
 #define BATCH 1000
 #define TRAIN_SPLIT 0.8
-#define LEARN_RATE 0.001f
+#define LEARN_RATE 0.01f
 #define MOMENTUM 0.9f
 #define EPSILON 0.000000001f
 
