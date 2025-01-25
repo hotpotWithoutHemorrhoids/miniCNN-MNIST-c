@@ -115,8 +115,8 @@ void load_betch_images(DataLoader* dataloader, Data* datas,int idx, int batch){
         datas->labels[i] = dataloader->labels[idx*batch+i];
         for(int j=0;j<row*col;j++){
             // 归一化
-            datas->data[i*row*col+j] = ((float)images[i*row*col+j])/255.0f;
-            // datas->data[i*row*col+j] = ((float)images[i*row*col+j]);
+            // datas->data[i*row*col+j] = ((float)images[i*row*col+j])/255.0f;
+            datas->data[i*row*col+j] = ((float)images[i*row*col+j]);
 
         }
     }
