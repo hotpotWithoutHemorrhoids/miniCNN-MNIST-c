@@ -1,53 +1,42 @@
 
 # 当前目录makefile文件
-CXX = g++
 CC = gcc
 
 # 编译选项
 CXXFLAGS = -g -o0-Wall -lm 
 CFLAGS = -g -Wall -O3 -lm -ffast-math
 
+CInclude=-I./include
+
 # 目标文件
-TARGET = cnn
+TARGET_CNN = cnn
+TARGET_NN = nn
 
-# 源文件
-SRCS = $(wildcard *.c)
-OBJS = $(patsubst %.c, %.o, $(SRCS))
-INCLUDE= -I./include
+# nn 的目标文件 和源文件
+NN_SRCS = nn.c
+NN_OBJS = ${NN_SRCS:.c=.o}
 
+# CNN 的目标文件和源文件
+CNN_SRCS= cnn.c
+CNN_OBJS = ${CNN_SRCS:.c=.o}
 
-# 生成目标文件
-$(TARGET): $(OBJS)
-	$(CC)  -o $@ $^ ${INCLUDE} $(CFLAGS)
+# 默认目标
+all: $(TARGET_NN) $(TARGET_NN)
 
+# 生成 nn 可执行文件
+${TARGET_NN}: ${NN_OBJS}
+	${CC} -o $@ $^ ${CInclude} ${CFLAGS}
 
-# # 生成目标文件
-# %.o: %.cpp
-# 	$(CXX) $(CXXFLAGS) -c $<
-${OBJS}: ${SRCS}
-	$(CC)  -c $< ${INCLUDE} $(CFLAGS)
-# 清理
+# 生成 cnn 可执行文件
+$(TARGET_CNN): $(CNN_OBJS)
+	${CC}  -o $@ $^ ${CInclude} ${CFLAGS}
+
+# 生成 .o 文件
+%.o: %.c
+	${CC} ${CFLAGS} -c $< -o $@ ${CInclude}
+
+# 清理生成的文件
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f ${NN_OBJS} ${CNN_OBJS} ${TARGET_CNN} ${TARGET_NN}
 
-
-# CC = gcc
-
-# TARGET = cnn
-# SRCS = cnn.c
-# INCLUDE=src
-# OBJS = $(SRCS:.c=.o)
-
-# CFLAGS = -Wall -g -I${INCLUDE}
-
-# %.o: %.c
-# 	$(CC) $(CFLAGS) -c $< -o $@
-
-# ${TARGET}: ${INCLUDE}/dataloader.h ${INCLUDE}/utils.h
-
-# $(TARGET): $(OBJS)
-# 	$(CC) $(OBJS) $(LDFLAGS) -o $@ 
-
-# .PHONY: clean
-# clean:
-# 	rm -f $(OBJS) $(TARGET)
+.PHONY: all clean
