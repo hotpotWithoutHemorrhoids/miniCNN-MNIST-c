@@ -83,6 +83,11 @@ void NN_init(NN* nn, int input_size, int fc1_size, int output_size){
     nn->params_mem = (float*)malloc(nn->total_params * sizeof(float));
     nn->momentum_memory = (float*)malloc(nn->total_params * sizeof(float));
     if(nn->params_mem != NULL){
+        for (int i = 0; i <nn->total_params ; i++){
+            nn->momentum_memory[i] = 0.0f;
+            nn->params_mem[i] = 0.0f;
+        } 
+
         nn->params.fc1_weights = nn->params_mem;
         nn->momentum.fc1_weight_mom = nn->momentum_memory;
 
@@ -108,9 +113,6 @@ void NN_init(NN* nn, int input_size, int fc1_size, int output_size){
         //     nn->params.fc2_weights[i] = ((float)rand()/RAND_MAX - 0.5f)*2*fc2_scale;
         // }
         
-        for (int i = 0; i <nn->total_params ; i++){
-            nn->momentum_memory[i] = 0.0f;
-        } 
     }
 
     nn->acts_memory = (float*)malloc(nn->total_acts * sizeof(float));
@@ -308,7 +310,7 @@ int main(int argc, char const *argv[])
     printf("input sdize: %d, fc1:size: %d, output_size: %d, batch: %d \n",nn.input_size,nn.fc1_size, nn.output_size, BATCH);
     
     int epoch = 0;
-    for(;epoch<EPOCHS; epoch++){
+/*     for(;epoch<EPOCHS; epoch++){
         for(int b=0;b<train_size/BATCH;b++){
         start = clock();
         load_betch_images(&dataloader, &(nn.datas), b, BATCH);
@@ -348,9 +350,57 @@ int main(int argc, char const *argv[])
                 correct_num += (pred_idx == test_label_idx ? 1: 0);
             }
         }
-        printf("epoch: %d test_loss: %.2f test accuracy: %.4f\n",
+        printf("epoch: %d test accuracy: %.4f\n",
                  epoch, (float)(correct_num/test_size));
+    } */
+
+    float* images = (float*)malloc(input_size * sizeof(float));
+    printf("11\n");
+    for(;epoch<EPOCHS; epoch++){
+        start = clock();
+        float loss = 0.0f;
+        // float train_correct=0;
+        float test_correct=0;
+
+        printf("epoch: %d\n", epoch);
+        for (int i = 0; i < train_size; i++){
+            // load a image
+            for (int j = 0; j < input_size; j++){
+                images[j] = (float) (dataloader.images[i*input_size + j]);
+            }
+            int target_label = (int)dataloader.labels[i];
+
+            // printf("label: %d\n", target_label);
+            // for (int m = 0; m < 28; m++){
+            //     for (int n = 0; n < 28; n++){
+            //         printf("%.1f, ", images[m*28+n]);
+            //     }
+            //     printf("\n");
+            // }break;
+            nn_forward(&nn, images);
+            loss -= logf(nn.acts.output[target_label] + 1e-10f);
+            nn_backward(&nn, images, target_label, LEARNING_RATE);
+        }
+        // break;
+        printf("loss: %f\n", loss);
+
+        for (int i = train_size; i < dataloader.nImages; i++){
+            for (int j = 0; j < input_size; j++){
+                // images[i] = ((float)dataloader.images[i*input_size + j]) / 255.0f;
+                unsigned char tmp = dataloader.images[i*input_size + j];
+                images[i] = (float)tmp / 255.0f;
+            }
+            int test_label = (int)dataloader.labels[i];
+            if (nn_predict(&nn, images) == test_label){
+                test_correct++;
+            }
+        }
+        end = clock();
+        float cost_time = ((double)(end -start)) / CLOCKS_PER_SEC;
+        printf("epoch: %d, accuracy: %.3f%%, avg_loss: %.4f, cost time: %.3f s\n",
+                epoch, (float)test_correct/test_size *100, loss/train_size, cost_time);
     }
+    free(images);
     DataLoader_clear(&dataloader);
     NN_clear(&nn);
     return 0;
