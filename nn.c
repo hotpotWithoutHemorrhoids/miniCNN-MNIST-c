@@ -12,7 +12,7 @@
 #define FC1_SIZE 256
 #define OUTPUT_SIZE 10
 #define TRAIN_SPLIT 0.8
-#define THRESDHOLD 0.5f
+#define THRESDHOLD 0.65f
 #define MOMENTUM 0.9f
 #define LEAK_RELU_SCALE 0.2f
 #define LEARNING_RATE 0.0005f
@@ -83,10 +83,6 @@ void NN_init(NN* nn, int input_size, int fc1_size, int output_size){
     nn->params_mem = (float*)malloc(nn->total_params * sizeof(float));
     nn->momentum_memory = (float*)malloc(nn->total_params * sizeof(float));
     if(nn->params_mem != NULL){
-        // for (int i = 0; i <nn->total_params ; i++){
-        //     nn->momentum_memory[i] = 0.0f;
-        //     nn->params_mem[i] = 0.0f;
-        // } 
         memset(nn->params_mem, 0.0f, nn->total_params);
         memset(nn->momentum_memory, 0.0f, nn->total_params);
 
@@ -105,15 +101,6 @@ void NN_init(NN* nn, int input_size, int fc1_size, int output_size){
         // init param
         _init_params(nn->params.fc1_weights, input_size*fc1_size);
         _init_params(nn->params.fc2_weights, fc1_size*output_size);
-        // float fc1_scale = sqrtf(2.0f / (input_size*fc1_size)), fc2_scale = sqrtf(2.0f / (output_size*fc1_size));
-        // for (int i = 0; i < input_size*fc1_size; i++){
-        //     nn->params.fc1_weights[i] = ((float)rand()/RAND_MAX - 0.5f)*2*fc1_scale;
-        //     // nn->params.fc1_weights[i] =  ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
-        // }
-
-        // for (int i = 0; i < output_size*fc1_size; i++){
-        //     nn->params.fc2_weights[i] = ((float)rand()/RAND_MAX - 0.5f)*2*fc2_scale;
-        // }
         
     }
 
@@ -123,27 +110,20 @@ void NN_init(NN* nn, int input_size, int fc1_size, int output_size){
         nn->acts.fc1_output = nn->acts_memory;
         nn->acts.fc2_output = nn->acts_memory + fc1_size;
         nn->acts.output = nn->acts_memory + fc1_size + output_size;
-        for (int i = 0; i < nn->total_acts; i++){
-            nn->acts_memory[i] = 0.0f;
-        }  
+        // for (int i = 0; i < nn->total_acts; i++){
+        //     nn->acts_memory[i] = 0.0f;
+        // } 
+        memset(nn->acts_memory, 0, nn->total_acts);
     }
 
     if(nn->grad_acts_memory != NULL){
         nn->grad_acts.grad_fc1_output = nn->grad_acts_memory;
         nn->grad_acts.grad_fc2_output = nn->grad_acts_memory + fc1_size;
-        for (int i = 0; i < nn->total_grad_acts; i++){
-            nn->grad_acts_memory[i] = 0.0f;
-        }  
+        // for (int i = 0; i < nn->total_grad_acts; i++){
+        //     nn->grad_acts_memory[i] = 0.0f;
+        // }  
+        memset(nn->grad_acts_memory, 0, nn->total_grad_acts);
     }
-
-    // TODO： 初始化 Data
-    if(nn->datas.data == NULL && nn->datas.labels == NULL){
-        printf("init datas %d \n",nn->input_size * BATCH);
-        nn->datas.data = (float*)malloc(nn->input_size * BATCH * sizeof(float));
-        nn->datas.labels = (int*)malloc(BATCH * sizeof(int));
-    }   
-
-    // printVector(nn->params.fc1_weights, input_size*fc1_size, "fc1 weights");
 }
 
 void NN_clear(NN* nn){
