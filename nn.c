@@ -7,15 +7,15 @@
 
 #define TRAIN_IMG_PATH "data/train-images.idx3-ubyte"
 #define TRAIN_LBL_PATH "data/train-labels.idx1-ubyte"
-#define EPOCHS 10
+#define EPOCHS 20
 #define BATCH 1000
 #define FC1_SIZE 256
 #define OUTPUT_SIZE 10
 #define TRAIN_SPLIT 0.8
 #define THRESDHOLD 0.5f
 #define MOMENTUM 0.9f
-#define LEAK_RELU_SCALE 0.1f
-#define LEARNING_RATE 0.001f
+#define LEAK_RELU_SCALE 0.2f
+#define LEARNING_RATE 0.0005f
 
 typedef struct
 {
@@ -83,10 +83,12 @@ void NN_init(NN* nn, int input_size, int fc1_size, int output_size){
     nn->params_mem = (float*)malloc(nn->total_params * sizeof(float));
     nn->momentum_memory = (float*)malloc(nn->total_params * sizeof(float));
     if(nn->params_mem != NULL){
-        for (int i = 0; i <nn->total_params ; i++){
-            nn->momentum_memory[i] = 0.0f;
-            nn->params_mem[i] = 0.0f;
-        } 
+        // for (int i = 0; i <nn->total_params ; i++){
+        //     nn->momentum_memory[i] = 0.0f;
+        //     nn->params_mem[i] = 0.0f;
+        // } 
+        memset(nn->params_mem, 0.0f, nn->total_params);
+        memset(nn->momentum_memory, 0.0f, nn->total_params);
 
         nn->params.fc1_weights = nn->params_mem;
         nn->momentum.fc1_weight_mom = nn->momentum_memory;
@@ -157,7 +159,6 @@ void NN_clear(NN* nn){
     if(nn->grad_acts_memory != NULL){
         free(nn->grad_acts_memory);
     }
-
     if(nn->datas.data != NULL){
         free(nn->datas.data);
         free(nn->datas.labels);
@@ -169,8 +170,9 @@ void fc_forward(float* inp, int inp_size,
                 float* out, int out_size, float* weight, float* bias){
 
     for (int i = 0; i < out_size; i++){
-        float* weights_row = weight + i*inp_size;
         out[i] = bias[i];
+        float* weights_row = weight + i*inp_size;
+
         for(int j=0; j<inp_size; j++){
             out[i] += inp[j] * weights_row[j];
         }
@@ -181,8 +183,8 @@ void fc_forward(float* inp, int inp_size,
 }
 
 void softmax_forward(float* inp, int size, float* output){
-    float max = 0.0f, sum = 0.0f;
-    for(int i=0; i<size; i++){
+    float max = inp[0], sum = 0.0f;
+    for(int i=1; i<size; i++){
         if(inp[i] > max) max = inp[i];
     }
 
@@ -191,7 +193,7 @@ void softmax_forward(float* inp, int size, float* output){
         sum += output[i];
     }
 
-    sum = sum==0.0f?1e-8f : sum;
+    sum = sum==0.0f?1e-10f : sum;
     for (int i = 0; i < size; i++){
         output[i] /= sum;
     }
@@ -210,22 +212,14 @@ void nn_forward(NN *nn, float* inp){
 }
 
 int nn_predict(NN* nn, float* inp){
-    int input_size = nn->input_size, 
-        fc1_size = nn->fc1_size, 
-        output_size = nn->output_size;
-    float* hidden_output = malloc(fc1_size* sizeof(float));
-    float* final_output = malloc(output_size* sizeof(output_size));
 
-    fc_forward(inp, input_size, hidden_output, fc1_size, 
-                nn->params.fc1_weights, nn->params.fc1_bias);
-    fc_forward(hidden_output, fc1_size, final_output, output_size,
-                nn->params.fc2_weights, nn->params.fc2_bias);
-    softmax_forward(final_output, output_size, final_output);
+    nn_forward(nn, inp);
 
     int max_index = 0;
     for (int i = 1; i < OUTPUT_SIZE; i++)
-        if (final_output[i] > final_output[max_index])
+        if (nn->acts.output[i] > nn->acts.output[max_index])
             max_index = i;
+
     return max_index;
 }
 
@@ -355,51 +349,48 @@ int main(int argc, char const *argv[])
     } */
 
     float* images = (float*)malloc(input_size * sizeof(float));
-    printf("11\n");
     for(;epoch<EPOCHS; epoch++){
         start = clock();
         float loss = 0.0f;
-        // float train_correct=0;
+        float train_correct=0;
         float test_correct=0;
 
-        printf("epoch: %d\n", epoch);
+        // printf("epoch: %d\n", epoch);
         for (int i = 0; i < train_size; i++){
             // load a image
             for (int j = 0; j < input_size; j++){
-                images[j] = (float) (dataloader.images[i*input_size + j]);
+                // images[j] = (float) (dataloader.images[i*input_size + j])/255.0f;
+                unsigned char tmp = dataloader.images[i*input_size + j];
+                images[j] = (float)tmp / 255.0f;
             }
             int target_label = (int)dataloader.labels[i];
 
-            // printf("label: %d\n", target_label);
-            // for (int m = 0; m < 28; m++){
-            //     for (int n = 0; n < 28; n++){
-            //         printf("%.1f, ", images[m*28+n]);
-            //     }
-            //     printf("\n");
-            // }break;
             nn_forward(&nn, images);
             loss -= logf(nn.acts.output[target_label] + 1e-10f);
+            train_correct += nn.acts.output[target_label]>THRESDHOLD?1:0;
             nn_backward(&nn, images, target_label, LEARNING_RATE);
         }
         // break;
-        printf("loss: %f\n", loss);
+        printf("loss: %f, train correct: %.3f\n", loss, train_correct/train_size);
 
-        for (int i = train_size; i < dataloader.nImages; i++){
+        for (int i = 0; i < test_size; i++){
             for (int j = 0; j < input_size; j++){
                 // images[i] = ((float)dataloader.images[i*input_size + j]) / 255.0f;
-                unsigned char tmp = dataloader.images[i*input_size + j];
-                images[i] = (float)tmp / 255.0f;
+                unsigned char tmp = dataloader.images[(i+train_size)*input_size + j];
+                images[j] = (float) (tmp) / 255.0f;
             }
-            int test_label = (int)dataloader.labels[i];
+            int test_label = (int)dataloader.labels[i+train_size];
             if (nn_predict(&nn, images) == test_label){
                 test_correct++;
             }
         }
+        
         end = clock();
         float cost_time = ((double)(end -start)) / CLOCKS_PER_SEC;
-        printf("epoch: %d, accuracy: %.3f%%, avg_loss: %.4f, cost time: %.3f s\n",
-                epoch, (float)test_correct/test_size *100, loss/train_size, cost_time);
+        printf("epoch: %d, test accuracy: %.3f, train set avg_loss: %.4f, train&test cost time: %.3f s\n",
+                epoch, (float)test_correct/test_size, loss/train_size, cost_time);
     }
+
     free(images);
     DataLoader_clear(&dataloader);
     NN_clear(&nn);
