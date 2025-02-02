@@ -4,7 +4,7 @@ CC = gcc
 
 # 编译选项
 CXXFLAGS = -g -o0-Wall -lm 
-CFLAGS = -g -Wall -O3 -lm -ffast-math
+CFLAGS = -g -Wall -O3 -lm -ffast-math -fopenmp
 
 CInclude=-I./include
 

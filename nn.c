@@ -1,6 +1,7 @@
 #include<stdlib.h>
 #include<time.h>
 #include<math.h>
+#include <omp.h>
 
 #include "dataloader.h"
 #include "debug.h"
@@ -47,13 +48,12 @@ typedef struct
 
 typedef struct 
 {
-    Data datas;
     int input_size;
     float* params_mem;
     int total_params;
     Param params;
     float* momentum_memory;
-    Momentum momentum;
+    Momentum momentum;  
     float* acts_memory;
     int total_acts;
     Act acts;
@@ -78,7 +78,6 @@ void NN_init(NN* nn, int input_size, int fc1_size, int output_size){
     nn->total_params = input_size*fc1_size+fc1_size + fc1_size*output_size+output_size;
     nn->total_acts = fc1_size + output_size*2;
     nn->total_grad_acts = fc1_size + output_size;
-    nn->datas.data = NULL, nn->datas.labels = NULL;
 
     nn->params_mem = (float*)malloc(nn->total_params * sizeof(float));
     nn->momentum_memory = (float*)malloc(nn->total_params * sizeof(float));
@@ -110,18 +109,14 @@ void NN_init(NN* nn, int input_size, int fc1_size, int output_size){
         nn->acts.fc1_output = nn->acts_memory;
         nn->acts.fc2_output = nn->acts_memory + fc1_size;
         nn->acts.output = nn->acts_memory + fc1_size + output_size;
-        // for (int i = 0; i < nn->total_acts; i++){
-        //     nn->acts_memory[i] = 0.0f;
-        // } 
+
         memset(nn->acts_memory, 0, nn->total_acts);
     }
 
     if(nn->grad_acts_memory != NULL){
         nn->grad_acts.grad_fc1_output = nn->grad_acts_memory;
         nn->grad_acts.grad_fc2_output = nn->grad_acts_memory + fc1_size;
-        // for (int i = 0; i < nn->total_grad_acts; i++){
-        //     nn->grad_acts_memory[i] = 0.0f;
-        // }  
+
         memset(nn->grad_acts_memory, 0, nn->total_grad_acts);
     }
 }
@@ -139,16 +134,13 @@ void NN_clear(NN* nn){
     if(nn->grad_acts_memory != NULL){
         free(nn->grad_acts_memory);
     }
-    if(nn->datas.data != NULL){
-        free(nn->datas.data);
-        free(nn->datas.labels);
-    }
 }
 
 
 void fc_forward(float* inp, int inp_size, 
                 float* out, int out_size, float* weight, float* bias){
-
+    
+    // #pragma omp parallel for
     for (int i = 0; i < out_size; i++){
         out[i] = bias[i];
         float* weights_row = weight + i*inp_size;
@@ -158,7 +150,7 @@ void fc_forward(float* inp, int inp_size,
         }
 
         // leak_relu
-        out[i] = out[i] >0 ? out[i] : LEAK_RELU_SCALE*out[i];
+        out[i] *= out[i] >0 ? 1.0f : LEAK_RELU_SCALE;
     }
 }
 
@@ -179,21 +171,39 @@ void softmax_forward(float* inp, int size, float* output){
     }
 }
 
-void nn_forward(NN *nn, float* inp){
-    // TODO nn_forward
+void nn_forward(NN *nn, float* inp, float* count_time){
+    // nn_forward
     int inp_size = nn->input_size, fc1_size = nn->fc1_size, output_size=nn->output_size;
-    fc_forward(inp, inp_size, 
+    if (count_time != NULL){
+        double t1, t2, t3;
+
+        t1 = omp_get_wtime();
+        fc_forward(inp, inp_size, 
                 nn->acts.fc1_output, fc1_size,
                  nn->params.fc1_weights, nn->params.fc1_bias);
-    fc_forward(nn->acts.fc1_output, fc1_size,
+        t2 = omp_get_wtime();
+        fc_forward(nn->acts.fc1_output, fc1_size,
                 nn->acts.fc2_output, output_size,
                 nn->params.fc2_weights, nn->params.fc2_bias);
-    softmax_forward(nn->acts.fc2_output, output_size, nn->acts.output);
+        t3 = omp_get_wtime();
+        count_time[0] += (float)(t2 - t1);
+        count_time[1] += (float)(t3 - t2);
+        softmax_forward(nn->acts.fc2_output, output_size, nn->acts.output);
+    }else{
+
+        fc_forward(inp, inp_size, 
+                nn->acts.fc1_output, fc1_size,
+                 nn->params.fc1_weights, nn->params.fc1_bias);
+        fc_forward(nn->acts.fc1_output, fc1_size,
+                nn->acts.fc2_output, output_size,
+                nn->params.fc2_weights, nn->params.fc2_bias);
+        softmax_forward(nn->acts.fc2_output, output_size, nn->acts.output);
+    }
 }
 
 int nn_predict(NN* nn, float* inp){
 
-    nn_forward(nn, inp);
+    nn_forward(nn, inp, NULL);
 
     int max_index = 0;
     for (int i = 1; i < OUTPUT_SIZE; i++)
@@ -269,8 +279,9 @@ void nn_backward(NN* nn, float* inp, int target_label, float lr){
 
 int main(int argc, char const *argv[])
 {
-    clock_t start, end;
+    double start, end;
     srand(time(NULL));
+    omp_set_num_threads(4); 
 
     DataLoader dataloader;
     dataloader_init(&dataloader, TRAIN_IMG_PATH, TRAIN_LBL_PATH, 1);
@@ -284,80 +295,47 @@ int main(int argc, char const *argv[])
     printf("input sdize: %d, fc1:size: %d, output_size: %d, batch: %d \n",nn.input_size,nn.fc1_size, nn.output_size, BATCH);
     
     int epoch = 0;
-/*     for(;epoch<EPOCHS; epoch++){
-        for(int b=0;b<train_size/BATCH;b++){
-        start = clock();
-        load_betch_images(&dataloader, &(nn.datas), b, BATCH);
-        float loss = 0.0f, corr = 0.0f;
-        for(int t = 0; t<BATCH; t++){
-            float* images = nn.datas.data + t*input_size;
-            int label_idx = nn.datas.labels[t];
-            // printf("label: %d\n", label_idx);
-            // printMatrix(images, 28, 28, "images");
-            nn_forward(&nn, images);
-
-            loss -= logf(nn.acts.output[label_idx] + 1e-10f);
-            corr += nn.acts.output[label_idx]>THRESDHOLD ?1.0f:0.0f;
-            // printVector(nn.acts.output, OUTPUT_SIZE, "output");
-            nn_backward(&nn, images, label_idx, LEARNING_RATE);
-            // break;
-        }
-        // break;
-        end = clock();
-        printf(" batch:%d,  loss:%.3f  corr: %.3f  cost time: %.3f\n", b, loss/BATCH, corr/BATCH, (float)(end-start)/CLOCKS_PER_SEC);
-        }
-
-        unsigned int correct_num = 0;
-        for(int i=0; i<test_size/BATCH; i++){
-            load_betch_images(&dataloader, &(nn.datas), i+train_size/BATCH, BATCH);
-            
-            for(int t = 0; t<BATCH; t++){
-                float* test_images = nn.datas.data + t*input_size;
-                int test_label_idx = nn.datas.labels[t];
-
-
-                // printf("label: %d\n", label_idx);
-                // printMatrix(images, 28, 28, "images");
-                // nn_forward(&nn, test_images);
-                int pred_idx = nn_predict(&nn, test_images);
-
-                correct_num += (pred_idx == test_label_idx ? 1: 0);
-            }
-        }
-        printf("epoch: %d test accuracy: %.4f\n",
-                 epoch, (float)(correct_num/test_size));
-    } */
-
+    double t1, t2, t3;
+    
     float* images = (float*)malloc(input_size * sizeof(float));
     for(;epoch<EPOCHS; epoch++){
-        start = clock();
+        start = omp_get_wtime();
         float loss = 0.0f;
         float train_correct=0;
         float test_correct=0;
-
-        // printf("epoch: %d\n", epoch);
+        
+        float forward_time=0, back_time=0;
+        float count_time[2] = {0};
         for (int i = 0; i < train_size; i++){
             // load a image
-            for (int j = 0; j < input_size; j++){
-                // images[j] = (float) (dataloader.images[i*input_size + j])/255.0f;
-                unsigned char tmp = dataloader.images[i*input_size + j];
-                images[j] = (float)tmp / 255.0f;
+            for (int j = 0; j < input_size; j++){                
+                images[j] = (float)(dataloader.images[i*input_size + j]) / 255.0f;
+
             }
             int target_label = (int)dataloader.labels[i];
-
-            nn_forward(&nn, images);
+            t1 = omp_get_wtime();
+            
+            nn_forward(&nn, images, count_time);
+            t2 = omp_get_wtime();
             loss -= logf(nn.acts.output[target_label] + 1e-10f);
             train_correct += nn.acts.output[target_label]>THRESDHOLD?1:0;
             nn_backward(&nn, images, target_label, LEARNING_RATE);
+            t3 = omp_get_wtime();
+            forward_time += (t2 - t1);
+            back_time += (t3 - t2);
         }
+        t1 = omp_get_wtime();
         // break;
-        printf("loss: %f, train correct: %.3f\n", loss, train_correct/train_size);
+        printf("loss: %f, train correct: %.3f, train cost: %.2fs\n", 
+                loss, train_correct/train_size, (t1 - start));
+        printf("train process forward cost: %.2f s, backward cost: %.2fs \n",
+                forward_time, back_time);
+        printf("forward:  fc1 cost: %.2f, fc2 cost: %.2f \n",
+                 count_time[0], count_time[1]);
 
         for (int i = 0; i < test_size; i++){
             for (int j = 0; j < input_size; j++){
-                // images[i] = ((float)dataloader.images[i*input_size + j]) / 255.0f;
-                unsigned char tmp = dataloader.images[(i+train_size)*input_size + j];
-                images[j] = (float) (tmp) / 255.0f;
+                images[j] = (float)(dataloader.images[(i+train_size)*input_size + j]) / 255.0f;
             }
             int test_label = (int)dataloader.labels[i+train_size];
             if (nn_predict(&nn, images) == test_label){
@@ -365,8 +343,8 @@ int main(int argc, char const *argv[])
             }
         }
         
-        end = clock();
-        float cost_time = ((double)(end -start)) / CLOCKS_PER_SEC;
+        end = omp_get_wtime();
+        double cost_time = (end -start);
         printf("epoch: %d, test accuracy: %.3f, train set avg_loss: %.4f, train&test cost time: %.3f s\n",
                 epoch, (float)test_correct/test_size, loss/train_size, cost_time);
     }
