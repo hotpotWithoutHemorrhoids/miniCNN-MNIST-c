@@ -140,7 +140,7 @@ void NN_clear(NN* nn){
 void fc_forward(float* inp, int inp_size, 
                 float* out, int out_size, float* weight, float* bias){
     
-    // #pragma omp parallel for
+    #pragma omp parallel for
     for (int i = 0; i < out_size; i++){
         out[i] = bias[i];
         float* weights_row = weight + i*inp_size;
