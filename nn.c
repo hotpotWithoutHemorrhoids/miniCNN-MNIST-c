@@ -141,16 +141,34 @@ void fc_forward(float* inp, int inp_size,
                 float* out, int out_size, float* weight, float* bias){
     
     // #pragma omp parallel for
-    for (int i = 0; i < out_size; i++){
+    // for (int i = 0; i < out_size; i++){
+    //     out[i] = bias[i];
+    //     float* weights_row = weight + i*inp_size;
+
+    //     for(int j=0; j<inp_size; j++){
+    //         out[i] += inp[j] * weights_row[j];
+    //     }
+
+    //     // leak_relu
+    //     out[i] *= out[i] >0 ? 1.0f : LEAK_RELU_SCALE;
+    // }
+
+    for (int i = 0; i < out_size; i++) {
         out[i] = bias[i];
-        float* weights_row = weight + i*inp_size;
+    }
 
-        for(int j=0; j<inp_size; j++){
-            out[i] += inp[j] * weights_row[j];
+    // TODO ？ 这里有个疑问， 为什么将inp_size 作为外层循环的时候会更快，快了将进45%
+    // 将outsize作为外层的时候，理论上访问weight应该是连续的，
+    // 而将inp_size放于外层的时候weight应该是不连续的才是
+    // #pragma omp parallel for
+    for (int j = 0; j < inp_size; j++){
+        for (int i = 0; i < out_size; i++){
+            out[i] += weight[i*inp_size + j] * inp[j];
         }
+    }
 
-        // leak_relu
-        out[i] *= out[i] >0 ? 1.0f : LEAK_RELU_SCALE;
+    for (int i = 0; i < out_size; i++){
+        out[i] *= (out[i] > 0)?1.0f : LEAK_RELU_SCALE;
     }
 }
 
