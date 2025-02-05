@@ -1,12 +1,17 @@
+#include<time.h>
+#include<unistd.h>
+
 #include "dataloader.h"
 #include "debug.h"
 #include "cnn.h"
 
 // 1: relu, 2: leakRelu
-#define RELU 1
+#define THRESHOLD 0.6f
+#define RELU 2
 #if RELU == 2
-    #define LEAK_RELU_SCALE 0.2f
+    #define LEAK_RELU_SCALE 0.1f
 #endif
+#define LEARN_RATE 0.005f
 
 // #define LOG true
 
@@ -392,7 +397,8 @@ void cnn_forward(CNN *model, float* inp, int h, int w){
     // printf("conv1 kernel size: %d, stride: %d, fliters: %d \n", params->conv1.kernel_size, params->conv1.stride, params->conv1.filters);
     // printVector(params->conv1.weights, params->conv1.weights_size, "conv1 weights");
     conv_forward(inp,params->conv1.size.in_size, 
-                acts->out_conv1, params->conv1.weights, params->conv1.kernel_size, params->conv1.stride, params->conv1.filters);
+                acts->out_conv1, params->conv1.weights, params->conv1.kernel_size, 
+                params->conv1.stride, params->conv1.filters);
     // printVector(acts->out_conv1, params->conv1.size.out_size.x*params->conv1.size.out_size.y*params->conv1.size.out_size.z, "acts->out_conv1");
 
     
@@ -412,9 +418,9 @@ void cnn_forward(CNN *model, float* inp, int h, int w){
     // printVector(acts->out_fc1, params->fc1.size.out_size.z, "fc1 output");
     fc_forward(acts->out_fc1, params->fc1.size.out_size.z, 
                 acts->out_fc2, params->fc2.weights, params->fc2.size.out_size.z,params->fc2.bias, true);
-    // printVector(acts->out_fc2, params->fc2.size.out_size.z, "forward before softmax");
+    printVector(acts->out_fc2, params->fc2.size.out_size.z, "forward before softmax");
     softmax_forward(acts->out_fc2, params->fc2.size.out_size.z);
-    // printVector(acts->out_fc2, params->fc2.size.out_size.z, "forward after softmax");
+    printVector(acts->out_fc2, params->fc2.size.out_size.z, "forward after softmax");
 } 
 
 void softmax_backward(float* inp, int inp_size,int target, float* d_inp){
@@ -424,7 +430,7 @@ void softmax_backward(float* inp, int inp_size,int target, float* d_inp){
 }
 
 void fc_backward(float* inp, Shape inp_size, float* d_loss,
-                Shape out_size, float* weights, float* bias,
+                Shape out_size,float* out, float* weights, float* bias,
                 float* d_inp, float* mementun, float lr, bool acti_func){
     /* 
         weights: (inp_len, out_len) 
@@ -436,9 +442,9 @@ void fc_backward(float* inp, Shape inp_size, float* d_loss,
     if(acti_func){
         for(int i=0;i<out_len;i++){
             #if RELU == 2
-                d_loss[i] *= d_loss[i]> 0 ?1 : LEAK_RELU_SCALE;
+                d_loss[i] *= out[i]> 0 ?1 : LEAK_RELU_SCALE;
             #else
-                d_loss[i] *= d_loss[i]>0?1:0.0f;
+                d_loss[i] *= out[i]>0?1:0.0f;
             #endif
         }
     }
@@ -459,10 +465,10 @@ void fc_backward(float* inp, Shape inp_size, float* d_loss,
         float* mementun_row = weight_mementun + i*inp_len;
         for (int j = 0; j < inp_len; j++){
             float grad_w_ij = d_loss[i] * inp[j];
-            // mementun_row[j] = mementun_row[j] * MOMENTUM + lr*grad_w_ij;
-            // weight_row[j] -= mementun_row[j]; 
+            mementun_row[j] = mementun_row[j] * MOMENTUM + lr*grad_w_ij;
+            weight_row[j] -= mementun_row[j]; 
 
-            weight_row[j] -=  lr*grad_w_ij;
+            // weight_row[j] -=  lr*grad_w_ij;
             
             // test
             // mementun_row[j] = grad_w_ij;
@@ -593,10 +599,10 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
                                 grad_w_ij += inp_channel[(l+i)*inp_w+(k+j)]*d_loss_c[l*out_w+k];
                             }
                         }
-                        // mementun_c[i*kernel_size+j] = mementun_c[i*kernel_size+j]*MOMENTUM+ lr*grad_w_ij;
+                        mementun_c[i*kernel_size+j] = mementun_c[i*kernel_size+j]*MOMENTUM+ lr*grad_w_ij;
                         // mementun_c[i*kernel_size+j] = grad_w_ij;
                         
-                        mementun_c[i*kernel_size+j] = lr*grad_w_ij;
+                        // mementun_c[i*kernel_size+j] = lr*grad_w_ij;
                         
                     }
 
@@ -677,11 +683,11 @@ void cnn_backward(CNN *model,float* inp,int label, float lr, int output_size){
     // printVector(grad_acts->grad_out_fc2, output_size, "grad_out_fc2");
 
     fc_backward(acts->out_fc1,params->fc2.size.in_size, grad_acts->grad_out_fc2,
-                 params->fc2.size.out_size,params->fc2.weights,params->fc2.bias, 
+                 params->fc2.size.out_size,acts->out_fc2 ,params->fc2.weights,params->fc2.bias, 
                  grad_acts->grad_out_fc1,mementun->mem_fc2,lr, true);
 
     fc_backward(acts->out_pool2, params->fc2.size.in_size, grad_acts->grad_out_fc1,
-                params->fc1.size.out_size,params->fc1.weights, params->fc1.bias,
+                params->fc1.size.out_size,acts->out_fc1, params->fc1.weights, params->fc1.bias,
                 grad_acts->grad_out_pool2, mementun->mem_fc1, lr, true);
     
     pool_backward(acts->out_conv2, params->pool2.size.in_size, grad_acts->grad_out_pool2, params->pool2.size.out_size,
@@ -711,10 +717,13 @@ int main(int argc, char const *argv[]){
 
     int train_size = (int)(dataloader.nImages*TRAIN_SPLIT);
     int test_size = dataloader.nImages - train_size;
+    int row = dataloader.imageSize.row, col = dataloader.imageSize.col;
+    int input_size = row * col;
     printf("train_size: %d, test_size: %d\n", train_size, test_size);
     int epoch = 0;
+    float* image = (float*)malloc(INPUT_SIZE * sizeof(float));
     for (; epoch < EPOCHS; epoch++){
-        for(int b=0;b<train_size/BATCH;b++){
+        /* for(int b=0;b<train_size/BATCH;b++){
             start = clock();
             // float* images = dataloader.images + b*BATCH*ImageSize*ImageSize;
             load_betch_images(&dataloader, &model.datas, b, BATCH);
@@ -751,9 +760,47 @@ int main(int argc, char const *argv[]){
         corr += model.acts.out_fc2[test_label_idx]>0.5f?1.0f:0.0f;
     }
     
-    printf("epoch: %d test accuracy: %f\n", epoch, corr/test_size);
-    }
+    printf("epoch: %d test accuracy: %f\n", epoch, corr/test_size); */
 
+        // train
+        float loss = 0, train_corr = 0.0f;
+        start = clock();
+        for (int i = 0; i < train_size; i++){
+            
+            // load a image
+            for (int j = 0; j < input_size; j++){
+                image[j] = (float) dataloader.images[i*input_size + j] / 255.0f;
+            }
+            int label = dataloader.labels[i];
+            printf("i: %d, label: %d\n", i, label);
+
+            cnn_forward(&model, image, row, col);
+            loss -= logf(model.acts.out_fc2[label]);
+            initialize_memory(model.grad_acts_memory, model.total_grad_acts);
+            cnn_backward(&model,image, label, LEARN_RATE, model.params.fc2.size.out_size.z);
+            train_corr += model.acts.out_fc2[label]> THRESHOLD ? 1 : 0;
+            sleep(1);
+        }
+        end = clock();
+        float train_time = (float)(end - start)/CLOCKS_PER_SEC;
+        printf("epoch: %d, train time:%.2f, loss: %.2f, train_corr: %.2f \n",
+                epoch, train_time, loss, train_corr);
+        
+        float test_corr = 0.0f;
+        for (int i = 0; i < test_size; i++){
+            // load a test image
+            for (int j = 0; j < input_size; j++){
+                image[j] = dataloader.images[(i+train_size)* input_size + j];
+            }
+            int test_label = dataloader.labels[i+train_size];
+
+            cnn_forward(&model, image, row, col);
+            test_corr += model.acts.out_fc2[test_label] > THRESHOLD? 1 : 0;
+        }
+        
+        printf("epoch: %d, test corr:%.2f \n", epoch, test_corr/test_size);
+    }
+    free(image);
 
     DataLoader_clear(&dataloader);
     CNN_clear(&model);

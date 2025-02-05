@@ -27,7 +27,7 @@
 #define EPOCHS 10
 #define BATCH 1000
 #define TRAIN_SPLIT 0.8
-#define LEARN_RATE 0.01f
+
 #define MOMENTUM 0.9f
 #define EPSILON 0.000000001f
 
@@ -149,7 +149,7 @@ void softmax_forward(float* inp, int inp_size);
 void cnn_forward(CNN *model, float* inp, int h, int w);
 
 void softmax_backward(float* inp, int inp_size,int target, float* d_inp);
-void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, float* weights, float* bias, float* d_inp, float* mementun, float lr, bool acti_func);
+void fc_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size,float* out, float* weights, float* bias, float* d_inp, float* mementun, float lr, bool acti_func);
 void pool_backward(float* inp, Shape inp_size, float* d_loss, Shape out_size, float* d_inp, int pool_size);
 void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, float* out, 
                     float* d_inp, float* conv_weights, float* mementun, int kernel_size, 
