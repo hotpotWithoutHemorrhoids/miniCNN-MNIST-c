@@ -24,7 +24,6 @@
 #define FC1_SIZE 128
 #define OUTPUT_SIZE 10
 
-#define EPOCHS 10
 #define BATCH 1000
 #define TRAIN_SPLIT 0.8
 
@@ -155,6 +154,6 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
                     float* d_inp, float* conv_weights, float* mementun, int kernel_size, 
                     int stride, int channel,float lr);
 
-void cnn_backward(CNN *model,float* inp,int label, float lr, int output_size);
+void cnn_backward(CNN *model,float* inp,int label, float lr);
 
 #endif
