@@ -7,11 +7,12 @@
 
 // 1: relu, 2: leakRelu
 #define THRESHOLD 0.6f
+#define EPOCHS 10
 #define RELU 2
 #if RELU == 2
     #define LEAK_RELU_SCALE 0.1f
 #endif
-#define LEARN_RATE 0.005f
+#define LEARN_RATE 0.001f
 
 // #define LOG true
 
@@ -52,7 +53,7 @@ void init_fc(FC* fc, int in_size, int out_size){
 void init_params(float*params, int size){
     float scale = sqrt(2.0f/size);
     for(int i = 0; i < size; i++){
-        params[i] = 2*scale * ((float)rand()/(float)(RAND_MAX) - 0.5f);
+        params[i] = 2* scale * ((float)rand()/(float)(RAND_MAX) - 0.5f);
     }
 }
 
@@ -417,7 +418,7 @@ void cnn_forward(CNN *model, float* inp, int h, int w){
     // fc_forward(acts->fc, fc_shape.z, acts->output, model->params.output.weights, model->params.output.output_size);
     // printVector(acts->out_fc1, params->fc1.size.out_size.z, "fc1 output");
     fc_forward(acts->out_fc1, params->fc1.size.out_size.z, 
-                acts->out_fc2, params->fc2.weights, params->fc2.size.out_size.z,params->fc2.bias, true);
+                acts->out_fc2, params->fc2.weights, params->fc2.size.out_size.z,params->fc2.bias, false);
     printVector(acts->out_fc2, params->fc2.size.out_size.z, "forward before softmax");
     softmax_forward(acts->out_fc2, params->fc2.size.out_size.z);
     printVector(acts->out_fc2, params->fc2.size.out_size.z, "forward after softmax");
@@ -672,19 +673,19 @@ void conv_backward(float* inp, Shape inp_size, float*d_loss, Shape out_size, flo
     }
 }
 
-void cnn_backward(CNN *model,float* inp,int label, float lr, int output_size){
+void cnn_backward(CNN *model,float* inp,int label, float lr){
     Activation* acts = &(model->acts);
     Grad_Activation* grad_acts = &(model->grad_acts);
     Paramerters* params = &(model->params);
     Mementun* mementun = &(model->mementun);
     float* output = acts->out_fc2;
-    softmax_backward(output, output_size,label, grad_acts->grad_out_fc2);
+    int output_size = model->params.fc2.size.out_size.z;
 
-    // printVector(grad_acts->grad_out_fc2, output_size, "grad_out_fc2");
+    softmax_backward(output, output_size,label, grad_acts->grad_out_fc2);
 
     fc_backward(acts->out_fc1,params->fc2.size.in_size, grad_acts->grad_out_fc2,
                  params->fc2.size.out_size,acts->out_fc2 ,params->fc2.weights,params->fc2.bias, 
-                 grad_acts->grad_out_fc1,mementun->mem_fc2,lr, true);
+                 grad_acts->grad_out_fc1,mementun->mem_fc2,lr, false);
 
     fc_backward(acts->out_pool2, params->fc2.size.in_size, grad_acts->grad_out_fc1,
                 params->fc1.size.out_size,acts->out_fc1, params->fc1.weights, params->fc1.bias,
@@ -720,48 +721,13 @@ int main(int argc, char const *argv[]){
     int row = dataloader.imageSize.row, col = dataloader.imageSize.col;
     int input_size = row * col;
     printf("train_size: %d, test_size: %d\n", train_size, test_size);
-    int epoch = 0;
-    float* image = (float*)malloc(INPUT_SIZE * sizeof(float));
-    for (; epoch < EPOCHS; epoch++){
-        /* for(int b=0;b<train_size/BATCH;b++){
-            start = clock();
-            // float* images = dataloader.images + b*BATCH*ImageSize*ImageSize;
-            load_betch_images(&dataloader, &model.datas, b, BATCH);
-            float loss = 0.0f;
-            float corr = 0.0f;
-            for (int t = 0; t < BATCH; t++){
-                float* images = model.datas.data + t*ImageSize*ImageSize;
-                // printMatrix(images, ImageSize,ImageSize, "image");
-                int label_idx = model.datas.labels[t];
-                // printf("label: %d\n", label_idx);
-                cnn_forward(&model,images,dataloader.imageSize.row,dataloader.imageSize.col);
-                
-                loss -= logf(model.acts.out_fc2[label_idx] + 1e-10f);
-                // printf("label: %d, output: %.2f\n", label_idx, model.acts.out_fc2[label_idx]);
-                // printVector(model.acts.out_fc2, 10, "out_fc2");
-                // TODO backward maybe question
-                initialize_memory(model.grad_acts_memory, model.total_grad_acts);
-                cnn_backward(&model,images, label_idx, LEARN_RATE, model.params.fc2.size.out_size.z);
-                corr += model.acts.out_fc2[label_idx]>0.5f?1.0f:0.0f;
-                // break;
-            }
-            end = clock();
-                // loss = 0.0f;
-            printf(" batch:%d,  loss:%.3f  corr: %.3f  cost time: %.3f\n", b, loss/BATCH, corr/BATCH, (float)(end-start)/CLOCKS_PER_SEC);
-            // break;
-        }
-
-    float corr = 0.0f;
-    for(int t=0;t<test_size;t++){    
-        float* test_images = dataloader.images + (train_size+t)*ImageSize*ImageSize;
-        int test_label_idx =  dataloader.labels[train_size+t];
-        cnn_forward(&model,test_images,dataloader.imageSize.row,dataloader.imageSize.col);
-        // printf("label: %d, output-prob: %f\n", test_label_idx, model.acts.out_fc2[test_label_idx]);
-        corr += model.acts.out_fc2[test_label_idx]>0.5f?1.0f:0.0f;
-    }
     
-    printf("epoch: %d test accuracy: %f\n", epoch, corr/test_size); */
+    float* image = (float*)malloc(INPUT_SIZE * sizeof(float));
 
+    // TODO 目前情况，训练到约莫50~60循环以后，出现梯度爆炸情况，导致输出为nan
+
+    for (int epoch=0; epoch < EPOCHS; epoch++){
+        
         // train
         float loss = 0, train_corr = 0.0f;
         start = clock();
@@ -776,11 +742,16 @@ int main(int argc, char const *argv[]){
 
             cnn_forward(&model, image, row, col);
             loss -= logf(model.acts.out_fc2[label]);
-            initialize_memory(model.grad_acts_memory, model.total_grad_acts);
-            cnn_backward(&model,image, label, LEARN_RATE, model.params.fc2.size.out_size.z);
+            // initialize_memory(model.grad_acts_memory, model.total_grad_acts);
+            cnn_backward(&model,image, label, LEARN_RATE);
             train_corr += model.acts.out_fc2[label]> THRESHOLD ? 1 : 0;
-            sleep(1);
+            // sleep(1);
+            // if(i>70){
+            //     printMatrix(image, row,col, "image");
+            //     break;
+            // }
         }
+        // break;
         end = clock();
         float train_time = (float)(end - start)/CLOCKS_PER_SEC;
         printf("epoch: %d, train time:%.2f, loss: %.2f, train_corr: %.2f \n",
@@ -806,3 +777,4 @@ int main(int argc, char const *argv[]){
     CNN_clear(&model);
     return 0;
 }
+               
