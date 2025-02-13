@@ -12,7 +12,7 @@
 #if RELU == 2
     #define LEAK_RELU_SCALE 0.1f
 #endif
-#define LEARN_RATE 0.001f
+#define LEARN_RATE 0.0005f
 
 // #define LOG true
 
@@ -746,12 +746,12 @@ int main(int argc, char const *argv[]){
             cnn_backward(&model,image, label, LEARN_RATE);
             train_corr += model.acts.out_fc2[label]> THRESHOLD ? 1 : 0;
             // sleep(1);
-            // if(i>70){
-            //     printMatrix(image, row,col, "image");
-            //     break;
-            // }
+            if(i>80){
+                printMatrix(image, row,col, "image");
+                break;
+            }
         }
-        // break;
+        break;
         end = clock();
         float train_time = (float)(end - start)/CLOCKS_PER_SEC;
         printf("epoch: %d, train time:%.2f, loss: %.2f, train_corr: %.2f \n",
